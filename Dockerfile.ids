@@ -1,0 +1,20 @@
+# Use the official Python 3.9 image as the base
+FROM python:3.9
+
+# Set the working directory inside the container
+WORKDIR /app
+
+# Copy the current directory contents into the container
+COPY . .
+
+# Install dependencies (Scapy and pyOpenSSL for SSL/TLS monitoring)
+RUN pip install --no-cache-dir scapy pyOpenSSL
+
+# Expose port 80 for monitoring if needed
+EXPOSE 80
+
+# Set environment variable to avoid Python output buffering
+ENV PYTHONUNBUFFERED=1
+
+# Run the Python script and keep the container alive using a tail command
+CMD ["sh", "-c", "python IDS.py --pcapfile dns-tunnel.pcap --logfile captured_packets.txt && tail -f /dev/null"]
