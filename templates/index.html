@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intrusion Detection System Dashboard</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Chart.js for dynamic graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.1/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.0.0"></script>
+
+    <!-- Custom Styling -->
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+
+        .container {
+            margin-top: 40px;
+        }
+
+        .card {
+            margin-bottom: 20px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 500px; /* Increased chart height */
+            width: 100%; /* Ensure chart takes full width */
+        }
+
+        h1, h2, h3 {
+            font-weight: bold;
+        }
+
+        #traffic_data {
+            height: 500px;
+            overflow-y: auto;
+        }
+
+        .traffic-table {
+            width: 100%;
+            font-size: 0.9rem;
+        }
+
+        .dark-mode {
+            background-color: #2e2e2e;
+            color: #f1f1f1;
+        }
+
+        .dark-mode a, .dark-mode h1, .dark-mode h2, .dark-mode h3 {
+            color: #f1f1f1;
+        }
+
+        .dark-mode .card {
+            background-color: #424242;
+            color: #f1f1f1;
+        }
+
+        .dark-mode .table {
+            background-color: #3a3a3a;
+        }
+
+        .dark-mode .table th, .dark-mode .table td {
+            color: #f1f1f1;
+        }
+
+        .dark-mode .chartjs-render-monitor {
+            background-color: #424242 !important;
+        }
+
+        .dark-mode canvas {
+            background-color: #424242 !important;
+        }
+
+        .dark-mode .chartjs-legend,
+        .dark-mode .chartjs-title,
+        .dark-mode .chartjs-label {
+            color: #f1f1f1 !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Title and Dark Mode Toggle -->
+        <div class="row">
+            <div class="col">
+                <h1 class="text-center">Intrusion Detection System Dashboard</h1>
+                <div class="text-end">
+                    <button id="toggle-dark-mode" class="btn btn-secondary">Toggle Dark Mode</button>
+                </div>
+                <hr>
+            </div>
+        </div>
+
+        <!-- Traffic Overview -->
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Traffic Overview (Bytes Transferred)</h3>
+                    </div>
+                    <div class="card-body chart-container">
+                        <!-- Chart.js Traffic Plot -->
+                        <canvas id="trafficChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Real-Time Traffic Data -->
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Real-Time Traffic Data</h3>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-striped traffic-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Source IP</th>
+                                    <th>Destination IP</th>
+                                    <th>Protocol</th>
+                                    <th>Source Port</th>
+                                    <th>Destination Port</th>
+                                    <th>Bytes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="traffic_data">
+                                <!-- Data will be dynamically inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap and jQuery (for dynamic updates) -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Custom Script to Fetch Traffic Data and Update Chart -->
+    <script>
+        // Initialize an empty chart with Chart.js
+        var ctx = document.getElementById('trafficChart').getContext('2d');
+        var trafficChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [], // Time labels
+                datasets: [{
+                    label: 'Bytes Transferred',
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 2,
+                    data: [] // Traffic data points
+                }]
+            },
+            options: {
+                responsive: true, /* Ensure responsiveness */
+                maintainAspectRatio: false, /* Disable default aspect ratio */
+                scales: {
+                    x: {
+                        type: 'time', // Set x-axis to use time scale
+                        time: {
+                            unit: 'second', // Display time in seconds
+                            displayFormats: {
+                                second: 'h:mm:ss a' // Show formatted time
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Time'
+                        }
+                    },
+                    y: {
+                        beginAtZero: true, // Ensure the y-axis starts from zero
+                        title: {
+                            display: true,
+                            text: 'Bytes Transferred'
+                        },
+                        ticks: {
+                            suggestedMin: 0, // Start from 0
+                            autoSkip: true, // Autoskip ticks to avoid clutter
+                            callback: function(value, index, values) {
+                                return Number(value.toFixed(2)); // Format for smaller values
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Function to update traffic data and chart every 5 seconds
+        function updateTrafficData() {
+            $.getJSON('/data', function (data) {
+                var chartLabels = [];
+                var chartData = [];
+                var trafficDataTable = $('#traffic_data');
+                trafficDataTable.empty();  // Clear old data
+
+                if (data.length === 0) {
+                    trafficDataTable.append('<tr><td colspan="7" class="text-center">No traffic data available</td></tr>');
+                } else {
+                    data.forEach(function (item) {
+                        // Safely handle undefined or missing data
+                        var time = new Date(item.time * 1000).toLocaleString();
+                        var src_ip = item.src_ip || '-';
+                        var dst_ip = item.dst_ip || '-';
+                        var protocol = item.protocol || '-';
+                        var src_port = item.src_port || '-';
+                        var dst_port = item.dst_port || '-';
+                        var bytesTransferred = item.raw_data ? item.raw_data.length : 0;
+
+                        // Add labels (timestamps) and data (bytes transferred) to chart arrays
+                        chartLabels.push(time);
+                        chartData.push(bytesTransferred);
+
+                        var row = '<tr>' +
+                            '<td>' + time + '</td>' +
+                            '<td>' + src_ip + '</td>' +
+                            '<td>' + dst_ip + '</td>' +
+                            '<td>' + protocol + '</td>' +
+                            '<td>' + src_port + '</td>' +
+                            '<td>' + dst_port + '</td>' +
+                            '<td>' + bytesTransferred + '</td>' +
+                            '</tr>';
+                        trafficDataTable.append(row);
+                    });
+
+                    // Check the values being added to the chart (for debugging)
+                    console.log("Labels: ", chartLabels);
+                    console.log("Data: ", chartData);
+
+                    // Update the chart with new data
+                    trafficChart.data.labels = chartLabels;
+                    trafficChart.data.datasets[0].data = chartData;
+                    trafficChart.update();
+                }
+            }).fail(function () {
+                // Handle failed request or no data
+                console.error('Failed to fetch traffic data.');
+                trafficDataTable.append('<tr><td colspan="7" class="text-center text-danger">Error fetching data</td></tr>');
+            });
+        }
+
+        // Dark Mode Toggle
+        $('#toggle-dark-mode').on('click', function () {
+            $('body').toggleClass('dark-mode');
+        });
+
+        // Start periodic updates every 5 seconds
+        setInterval(updateTrafficData, 5000);
+    </script>
+</body>
+
+</html>

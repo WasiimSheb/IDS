@@ -1,7 +1,8 @@
 import time
 import chardet
+from shared import flows  # Import flows from shared.py
 from scapy.all import IP, TCP, UDP, ICMP, DNS
-from collections import defaultdict
+from collections import defaultdict, deque  # Import deque
 import ipaddress
 
 # Trackers to hold state information for ICMP, DNS, SYN flood, and port scans
@@ -9,6 +10,7 @@ icmp_tracker = defaultdict(list)
 dns_tracker = defaultdict(list)
 syn_flood_tracker = defaultdict(int)
 scanning_ips = {}
+traffic_history = defaultdict(lambda: deque(maxlen=10))  # Track up to the last 10 traffic stats per IP
 
 # Time window for tracking port scan activity
 port_scan_time_window = 60  # 60 seconds
@@ -64,11 +66,17 @@ def detect_excessive_dns_queries(packet, log_file, dns_query_threshold=100, dns_
         detected_encoding = chardet.detect(query_raw)
         encoding = detected_encoding.get('encoding', 'utf-8')
 
+        log_to_file(log_file, f"Detected DNS Query: {query_raw} with encoding {encoding}")
+
         try:
+            # Try decoding the query name with detected encoding
             query = query_raw.decode(encoding)
+            log_to_file(log_file, f"Decoded DNS Query: {query}")
         except (UnicodeDecodeError, TypeError):
+            # If decoding fails, decode with 'utf-8' and log the issue
             query = query_raw.decode('utf-8', errors="replace")
-            log_to_file(log_file, f"Decoding issue with {encoding}, replaced invalid characters in query: {query}")
+            log_to_file(log_file, "Decoding issue: Non-ASCII character found in DNS query name.")
+            log_to_file(log_file, f"Replaced non-ASCII DNS Query: {query}")
 
         src_ip = packet[IP].src
         dns_tracker[src_ip].append(time.time())
@@ -76,6 +84,7 @@ def detect_excessive_dns_queries(packet, log_file, dns_query_threshold=100, dns_
         # Clean up old DNS queries
         dns_tracker[src_ip] = [t for t in dns_tracker[src_ip] if time.time() - t < dns_time_window]
 
+        # Log excessive DNS queries if threshold is exceeded
         if len(dns_tracker[src_ip]) > dns_query_threshold:
             log_to_file(log_file, f"Excessive DNS Queries Detected: {src_ip} made {len(dns_tracker[src_ip])} DNS queries in {dns_time_window} seconds.")
 
@@ -145,3 +154,19 @@ def detect_port_scan(src_ip, dst_port, packet_time, log_file, port_scan_threshol
         log_to_file(log_file, f"Intrusion Detected: Port scanning detected from {src_ip}")
         # Optionally, reset tracking after detection to avoid multiple detections
         scanning_ips[src_ip] = {"ports": set(), "start_time": packet_time}
+
+
+def detect_traffic_anomalies(flow_key, log_file):
+    src_ip = flow_key[0]
+    current_traffic = flows[flow_key]["bytes"]
+    
+    # Append the current traffic to the history of the source IP
+    traffic_history[src_ip].append(current_traffic)
+    
+    # Calculate average past traffic
+    if len(traffic_history[src_ip]) > 1:
+        avg_traffic = sum(traffic_history[src_ip]) / len(traffic_history[src_ip])
+        
+        # Check if current traffic exceeds 2 times the average, indicating an anomaly
+        if current_traffic > 2 * avg_traffic:
+            log_to_file(log_file, f"Traffic Anomaly Detected: {src_ip} shows sudden traffic spike. Current: {current_traffic}, Avg: {avg_traffic}")
