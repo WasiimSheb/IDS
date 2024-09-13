@@ -9,171 +9,291 @@
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
 
-    <!-- Chart.js for dynamic graphs -->
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.1/build/global/luxon.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.0.0"></script>
 
-    <!-- Custom Styling -->
     <style>
         body {
-            background-color: #f8f9fa;
+            background-color: #f1f1f1;
         }
 
-        .container {
+        .container-fluid {
             margin-top: 40px;
         }
 
         .card {
             margin-bottom: 20px;
+            background-color: #ffffff;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
         }
 
         .chart-container {
             position: relative;
-            height: 500px; /* Increased chart height */
-            width: 100%; /* Ensure chart takes full width */
+            height: 400px;
+            width: 100%;
         }
 
-        h1, h2, h3 {
+        h1,
+        h2 {
             font-weight: bold;
         }
 
-        #traffic_data {
-            height: 500px;
-            overflow-y: auto;
+        .stat-box {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
         }
 
-        .traffic-table {
-            width: 100%;
-            font-size: 0.9rem;
+        .stat-box .stat {
+            background-color: #ffffff;
+            border-radius: 5px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+            transition: background-color 0.3s ease;
         }
 
-        .dark-mode {
-            background-color: #2e2e2e;
-            color: #f1f1f1;
+        .stat-box .stat:hover {
+            background-color: #e9ecef;
         }
 
-        .dark-mode a, .dark-mode h1, .dark-mode h2, .dark-mode h3 {
-            color: #f1f1f1;
+        .stat-box .stat h3 {
+            font-size: 1.7rem;
+            font-weight: 700;
+            color: #007bff;
         }
 
-        .dark-mode .card {
-            background-color: #424242;
-            color: #f1f1f1;
+        .detected-threats {
+            color: red;
+            font-weight: bold;
         }
 
-        .dark-mode .table {
-            background-color: #3a3a3a;
+        /* Add distinct colors to the stat cards */
+        #total-packets {
+            color: #28a745;
         }
 
-        .dark-mode .table th, .dark-mode .table td {
-            color: #f1f1f1;
+        #total-data {
+            color: #17a2b8;
         }
 
-        .dark-mode .chartjs-render-monitor {
-            background-color: #424242 !important;
+        #num-flows {
+            color: #ffc107;
         }
 
-        .dark-mode canvas {
-            background-color: #424242 !important;
+        #detected-threats {
+            color: red;
         }
 
-        .dark-mode .chartjs-legend,
-        .dark-mode .chartjs-title,
-        .dark-mode .chartjs-label {
-            color: #f1f1f1 !important;
+        /* Styling for the table rows */
+        tbody tr:hover {
+            background-color: #f8f9fa;
+            cursor: pointer;
+        }
+
+        /* Pagination button styling */
+        .pagination-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .pagination-container .btn {
+            padding: 10px 20px;
+            font-size: 1rem;
+            font-weight: 500;
+            margin: 0 5px;
+            transition: background-color 0.3s ease;
+        }
+
+        .pagination-container .btn-primary:hover {
+            background-color: #0056b3;
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <!-- Title and Dark Mode Toggle -->
-        <div class="row">
-            <div class="col">
-                <h1 class="text-center">Intrusion Detection System Dashboard</h1>
-                <div class="text-end">
-                    <button id="toggle-dark-mode" class="btn btn-secondary">Toggle Dark Mode</button>
-                </div>
-                <hr>
+    <div class="container-fluid">
+        <!-- Title -->
+        <h1 class="text-center" style="color: #007bff;">Intrusion Detection System Dashboard</h1>
+
+        <!-- Traffic Statistics -->
+        <div class="stat-box col-md-12">
+            <div class="stat col-md-3">
+                <h3 id="total-packets">0</h3>
+                <p>Total Packets</p>
+            </div>
+            <div class="stat col-md-3">
+                <h3 id="total-data">0 Bytes</h3>
+                <p>Total Data Transferred</p>
+            </div>
+            <div class="stat col-md-3">
+                <h3 id="num-flows">0</h3>
+                <p>Number of Flows</p>
+            </div>
+            <div class="stat col-md-3 detected-threats">
+                <h3 id="detected-threats">None</h3>
+                <p>Detected Attacks</p>
             </div>
         </div>
 
-        <!-- Traffic Overview -->
+        <!-- Traffic Overview Graph and Data Table -->
         <div class="row">
-            <div class="col-md-12">
+            <div class="col-md-8">
                 <div class="card">
-                    <div class="card-header">
-                        <h3>Traffic Overview (Bytes Transferred)</h3>
-                    </div>
                     <div class="card-body chart-container">
-                        <!-- Chart.js Traffic Plot -->
                         <canvas id="trafficChart"></canvas>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Real-Time Traffic Data -->
-        <div class="row">
-            <div class="col-md-12">
+            <!-- Real-Time Traffic Data Table -->
+            <div class="col-md-4">
                 <div class="card">
-                    <div class="card-header">
+                    <div class="card-header" style="background-color: #007bff; color: #fff;">
                         <h3>Real-Time Traffic Data</h3>
                     </div>
                     <div class="card-body">
-                        <table class="table table-striped traffic-table">
+                        <!-- Pagination controls -->
+                        <div class="pagination-container text-center mb-3">
+                            <button id="prev-page" class="btn btn-primary">Previous</button>
+                            <button id="next-page" class="btn btn-primary">Next</button>
+                            <p>Page: <span id="currentPage">1</span></p>
+                        </div>
+                        <!-- Data Table -->
+                        <table class="table table-striped">
                             <thead>
                                 <tr>
                                     <th>Time</th>
-                                    <th>Source IP</th>
-                                    <th>Destination IP</th>
-                                    <th>Protocol</th>
-                                    <th>Source Port</th>
-                                    <th>Destination Port</th>
-                                    <th>Bytes</th>
+                                    <th>Bytes Transferred</th>
                                 </tr>
                             </thead>
                             <tbody id="traffic_data">
-                                <!-- Data will be dynamically inserted here -->
+                                <!-- Data dynamically inserted here -->
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- Flow Statistics (Optional future chart or flow-specific info) -->
+        <div id="flowData" class="my-4">
+            <div class="card">
+                <div class="card-header" style="background-color: #ffc107; color: #333;">
+                    <h3>Flow Statistics</h3>
+                </div>
+                <div class="card-body text-center">
+                    <p id="flow-summary">Flow-specific details can be shown here if needed.</p>
+                </div>
+            </div>
+        </div>
+
     </div>
 
-    <!-- Bootstrap and jQuery (for dynamic updates) -->
+    <!-- jQuery and Bootstrap JS -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- Custom Script to Fetch Traffic Data and Update Chart -->
+    <!-- Chart.js Script -->
     <script>
-        // Initialize an empty chart with Chart.js
+        // Function to update the dashboard stats (Total Packets, Total Data Transferred, etc.)
+        function updateDashboardStats() {
+            $.getJSON('/stats', function (data) {
+                // Update the values in the stats boxes
+                $('#total-packets').text(data.total_packets);
+                $('#total-data').text(`${data.total_data_transferred} Bytes`);
+                $('#num-flows').text(data.num_flows);
+                $('#detected-threats').text(data.detected_attacks || 'None');
+            });
+        }
+
+        // Function to update traffic data and chart
+        function updateTrafficData(page) {
+            $.getJSON('/data', { page: page, page_size: pageSize }, function (response) {
+                var trafficDataTable = $('#traffic_data');
+                trafficDataTable.empty();  // Clear old data
+
+                var labels = [];
+                var dataPoints = [];
+
+                response.data.forEach(function (item) {
+                    // Add data to table
+                    var row = '<tr>' +
+                        '<td>' + new Date(item.time * 1000).toLocaleString() + '</td>' +
+                        '<td>' + item.raw_data + ' Bytes</td>' +
+                        '</tr>';
+                    trafficDataTable.append(row);
+
+                    // Add data to chart
+                    labels.push(new Date(item.time * 1000));
+                    dataPoints.push(parseInt(item.raw_data));
+                });
+
+                // Update the chart
+                trafficChart.data.labels = labels;
+                trafficChart.data.datasets[0].data = dataPoints;
+                trafficChart.update();
+
+                // Update page number display
+                $('#currentPage').text(page);
+            });
+        }
+
+        function updateStats() {
+            fetch('/stats')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('total-packets').textContent = data.total_packets;
+                    document.getElementById('total-data').textContent = `${data.total_data_transferred} Bytes`;
+                    document.getElementById('num-flows').textContent = data.num_flows;
+                    document.getElementById('detected-threats').textContent = data.detected_attacks > 0 ? data.detected_attacks : 'None';
+                    if (data.detected_attacks > 0) {
+                        document.getElementById('detected-threats').classList.remove('detected-threats');
+                        document.getElementById('detected-threats').classList.add('detected-threats-active');
+                    }
+                })
+                .catch(error => console.error('Error fetching stats:', error));
+        }
+
+
+        // Function to update flow data
+        function updateFlowData() {
+            $.getJSON('/flows', function (data) {
+                $('#flow-summary').text(`Total Flows: ${data.total_flows}, Total Bytes Transferred: ${data.total_bytes} Bytes`);
+            });
+        }
+
+        // Initialize the first page
+        var currentPage = 1;
+        var pageSize = 50;    // Number of entries per page
+
+        // Initialize Chart with Chart.js
         var ctx = document.getElementById('trafficChart').getContext('2d');
         var trafficChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: [], // Time labels
+                labels: [],  // Time labels
                 datasets: [{
                     label: 'Bytes Transferred',
                     backgroundColor: 'rgba(54, 162, 235, 0.2)',
                     borderColor: 'rgba(54, 162, 235, 1)',
                     borderWidth: 2,
-                    data: [] // Traffic data points
+                    fill: false,
+                    data: []  // Traffic data points
                 }]
             },
             options: {
-                responsive: true, /* Ensure responsiveness */
-                maintainAspectRatio: false, /* Disable default aspect ratio */
+                responsive: true,
+                maintainAspectRatio: false,
                 scales: {
                     x: {
-                        type: 'time', // Set x-axis to use time scale
+                        type: 'time',
                         time: {
-                            unit: 'second', // Display time in seconds
+                            unit: 'second',
                             displayFormats: {
-                                second: 'h:mm:ss a' // Show formatted time
+                                second: 'h:mm:ss a'
                             }
                         },
                         title: {
@@ -182,84 +302,69 @@
                         }
                     },
                     y: {
-                        beginAtZero: true, // Ensure the y-axis starts from zero
                         title: {
                             display: true,
                             text: 'Bytes Transferred'
-                        },
-                        ticks: {
-                            suggestedMin: 0, // Start from 0
-                            autoSkip: true, // Autoskip ticks to avoid clutter
-                            callback: function(value, index, values) {
-                                return Number(value.toFixed(2)); // Format for smaller values
-                            }
                         }
                     }
                 }
             }
         });
 
-        // Function to update traffic data and chart every 5 seconds
-        function updateTrafficData() {
-            $.getJSON('/data', function (data) {
-                var chartLabels = [];
-                var chartData = [];
-                var trafficDataTable = $('#traffic_data');
-                trafficDataTable.empty();  // Clear old data
 
-                if (data.length === 0) {
-                    trafficDataTable.append('<tr><td colspan="7" class="text-center">No traffic data available</td></tr>');
-                } else {
-                    data.forEach(function (item) {
-                        // Safely handle undefined or missing data
-                        var time = new Date(item.time * 1000).toLocaleString();
-                        var src_ip = item.src_ip || '-';
-                        var dst_ip = item.dst_ip || '-';
-                        var protocol = item.protocol || '-';
-                        var src_port = item.src_port || '-';
-                        var dst_port = item.dst_port || '-';
-                        var bytesTransferred = item.raw_data ? item.raw_data.length : 0;
+        function loadAttacks() {
+            fetch('/attacks')
+                .then(response => response.json())
+                .then(data => {
+                    const attackCountElement = document.getElementById('detected-threats');
+                    const attackListElement = document.getElementById('attacks-list');
 
-                        // Add labels (timestamps) and data (bytes transferred) to chart arrays
-                        chartLabels.push(time);
-                        chartData.push(bytesTransferred);
+                    // Update the detected threats count
+                    attackCountElement.innerHTML = data.attacks.length;
 
-                        var row = '<tr>' +
-                            '<td>' + time + '</td>' +
-                            '<td>' + src_ip + '</td>' +
-                            '<td>' + dst_ip + '</td>' +
-                            '<td>' + protocol + '</td>' +
-                            '<td>' + src_port + '</td>' +
-                            '<td>' + dst_port + '</td>' +
-                            '<td>' + bytesTransferred + '</td>' +
-                            '</tr>';
-                        trafficDataTable.append(row);
+                    // Clear previous attack list
+                    attackListElement.innerHTML = '';
+
+                    // Populate the attack list
+                    data.attacks.forEach(attack => {
+                        const listItem = document.createElement('li');
+                        listItem.textContent = `${attack.type}: ${attack.description} at ${new Date(attack.timestamp * 1000).toLocaleString()}`;
+                        attackListElement.appendChild(listItem);
                     });
-
-                    // Check the values being added to the chart (for debugging)
-                    console.log("Labels: ", chartLabels);
-                    console.log("Data: ", chartData);
-
-                    // Update the chart with new data
-                    trafficChart.data.labels = chartLabels;
-                    trafficChart.data.datasets[0].data = chartData;
-                    trafficChart.update();
-                }
-            }).fail(function () {
-                // Handle failed request or no data
-                console.error('Failed to fetch traffic data.');
-                trafficDataTable.append('<tr><td colspan="7" class="text-center text-danger">Error fetching data</td></tr>');
-            });
+                })
+                .catch(error => console.error('Error fetching attacks:', error));
         }
 
-        // Dark Mode Toggle
-        $('#toggle-dark-mode').on('click', function () {
-            $('body').toggleClass('dark-mode');
+
+        // Call this function periodically to update the attacks
+        setInterval(loadAttacks, 5000);  // Refresh every 5 seconds
+
+        // Call the functions to update the stats and traffic data
+        updateDashboardStats();
+        updateTrafficData(currentPage);
+        updateFlowData();
+
+        // Pagination controls
+        $('#prev-page').on('click', function () {
+            if (currentPage > 1) {
+                currentPage--;
+                updateTrafficData(currentPage);
+            }
         });
 
-        // Start periodic updates every 5 seconds
-        setInterval(updateTrafficData, 5000);
+        $('#next-page').on('click', function () {
+            currentPage++;
+            updateTrafficData(currentPage);
+        });
+
+        // Set an interval to refresh the dashboard stats and data periodically (e.g., every 10 seconds)
+        setInterval(function () {
+            updateDashboardStats();
+            updateFlowData();
+            updateTrafficData(currentPage);
+        }, 10000);  // 10 seconds
     </script>
+
 </body>
 
 </html>
