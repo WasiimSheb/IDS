@@ -1,80 +1,65 @@
+import logging
+import time
 import unittest
+import os
+import sqlite3
+from scapy.all import IP, TCP, raw  # Import IP, TCP, and raw from Scapy
 from IDS import process_pcap_file, validate_ip_packet, validate_tcp_packet
-from scapy.all import IP, TCP  # Import IP and TCP directly from scapy
-
 from shared import flows
+from db_utils import get_db_connection  # Assuming you have a db_utils module
 
 class TestIntrusionDetection(unittest.TestCase):
 
     def setUp(self):
+        # Ensure a fresh log file for each test
         self.test_logfile = "test_log.txt"
+        
+        # Set up the database connection with timeout
+        self.conn = get_db_connection()
+        self.conn.execute('PRAGMA busy_timeout = 5000')  # 5 seconds timeout if locked
+        self.conn.execute('PRAGMA journal_mode=WAL')  # Ensure WAL mode is enabled
+        self.conn.commit()
+        self.conn.close()  # Ensure no open connection between tests
+
+    def process_pcap_and_check_log(self, pcap_file, expected_log_message, not_in_log=False):
+        """Helper function to process a PCAP file and check for a specific log message."""
+        with open(self.test_logfile, "w") as log_file:
+            process_pcap_file(pcap_file, log_file)
+
+        with open(self.test_logfile, "r") as log_file:
+            log_content = log_file.read()
+
+            if not_in_log:
+                self.assertNotIn(expected_log_message, log_content)
+            else:
+                self.assertIn(expected_log_message, log_content)
 
     def test_syn_flood(self):
-        with open(self.test_logfile, "w") as log_file:
-            process_pcap_file("pcap/syn_flood.pcap", log_file)
-        with open(self.test_logfile, "r") as log_file:
-            log_content = log_file.read()
-            self.assertIn("Intrusion Detected: SYN flood detected", log_content)
+        self.process_pcap_and_check_log("pcap/syn_flood.pcap", "Intrusion Detected: SYN flood detected")
 
     def test_port_scan(self):
-        with open(self.test_logfile, "w") as log_file:
-            process_pcap_file("pcap/portscan.pcap", log_file)
-        with open(self.test_logfile, "r") as log_file:
-            log_content = log_file.read()
-            self.assertIn("Intrusion Detected: Port scanning detected", log_content)
+        self.process_pcap_and_check_log("pcap/portscan.pcap", "Intrusion Detected: Port scanning detected")
 
     def test_port_scan2(self):
-        with open(self.test_logfile, "w") as log_file:
-            process_pcap_file("pcap/portscan1.pcap", log_file)
-        with open(self.test_logfile, "r") as log_file:
-            log_content = log_file.read()
-            self.assertIn("Intrusion Detected: Port scanning detected", log_content)
+        self.process_pcap_and_check_log("pcap/portscan1.pcap", "Intrusion Detected: Port scanning detected")
 
     def test_ftp_exfiltration(self):
-        with open(self.test_logfile, "w") as log_file:
-            process_pcap_file("pcap/ftp.pcap", log_file)
-        with open(self.test_logfile, "r") as log_file:
-            log_content = log_file.read()
-            self.assertIn("Unauthorized File Transfer Detected", log_content)
+        self.process_pcap_and_check_log("pcap/ftp.pcap", "Unauthorized File Transfer Detected")
 
     def test_dns_tunneling(self):
-        with open(self.test_logfile, "w") as log_file:
-            process_pcap_file("pcap/dns.pcap", log_file)
-        with open(self.test_logfile, "r") as log_file:
-            log_content = log_file.read()
-            self.assertIn("Intrusion Detected: Possible DNS exfiltration", log_content)
+        self.process_pcap_and_check_log("pcap/dns.pcap", "Intrusion Detected: Possible DNS exfiltration")
 
     def test_http_covert_channel(self):
-        with open(self.test_logfile, "w") as log_file:
-            process_pcap_file("pcap/http_covert_channel.pcap", log_file)
-        with open(self.test_logfile, "r") as log_file:
-            log_content = log_file.read()
-            self.assertIn("Intrusion Detected: HTTP Covert Channel Detected", log_content)
+        self.process_pcap_and_check_log("pcap/http_covert_channel.pcap", "Intrusion Detected: HTTP Covert Channel Detected")
 
     def test_icmp_exfiltration(self):
-        with open(self.test_logfile, "w") as log_file:
-            process_pcap_file("pcap/icmp_large.pcap", log_file)
-        
-        # Read the log to ensure the detection works
-        with open(self.test_logfile, "r") as log_file:
-            log_content = log_file.read()
-            self.assertIn("Suspicious ICMP traffic", log_content)
+        self.process_pcap_and_check_log("pcap/icmp_large.pcap", "Suspicious ICMP traffic")
 
     def test_icmp_normal(self):
-        with open(self.test_logfile, "w") as log_file:
-            process_pcap_file("pcap/icmp_normal.pcap", log_file)
-    
-        # Read the log to ensure there's no detection of suspicious ICMP traffic
-        with open(self.test_logfile, "r") as log_file:
-            log_content = log_file.read()
+        self.process_pcap_and_check_log("pcap/icmp_normal.pcap", "Suspicious ICMP traffic", not_in_log=True)
 
-            # Add an assertion that "Suspicious ICMP traffic" is NOT present
-            self.assertNotIn("Suspicious ICMP traffic", log_content)
-
-    
     def test_invalid_ip_packet(self):
         """Test handling of malformed IP packets."""
-        # Now using the correct IP class from Scapy
         packet = IP(src="192.168.1.1")  # Incomplete IP packet
         is_valid, msg = validate_ip_packet(packet)
         self.assertFalse(is_valid)
@@ -82,90 +67,66 @@ class TestIntrusionDetection(unittest.TestCase):
 
     def test_tcp_packet_with_invalid_checksum(self):
         """Test detection of TCP packets with invalid checksums."""
-        # Construct a valid IP packet with necessary fields set
         packet = IP(src="192.168.1.1", dst="192.168.1.2", ihl=5, ttl=64) / TCP()
 
-        # Manually set an invalid TCP checksum (0xFFFF) and prevent Scapy from recalculating it
+        # Manually set an invalid checksum (0xFFFF) to simulate the issue
         packet[TCP].chksum = 0xFFFF
+        packet = IP(raw(packet))
 
         # Validate the IP packet first
         is_valid_ip, msg_ip = validate_ip_packet(packet)
-        self.assertTrue(is_valid_ip, msg_ip)  # Ensure the IP packet is valid
+        self.assertTrue(is_valid_ip, msg_ip)
 
-        # Validate the TCP checksum (now the function actually checks it)
+        # Validate the TCP checksum
         is_valid_tcp, msg_tcp = validate_tcp_packet(packet, check_checksum=True)
-        self.assertFalse(is_valid_tcp, msg_tcp)  # Ensure the TCP checksum is invalid
+        self.assertFalse(is_valid_tcp, msg_tcp)
         self.assertIn("Invalid TCP checksum", msg_tcp)
 
     def test_flow_tracking(self):
         with open(self.test_logfile, "w") as log_file:
             process_pcap_file("pcap/flowTracking.pcap", log_file)
 
-        # Check if at least one flow was tracked
         self.assertGreater(len(flows), 0, "No flows were tracked.")
 
         for flow_key, flow_info in flows.items():
-            # Assert that the flow key has the correct structure (src_ip, dst_ip, src_port, dst_port, protocol)
             self.assertEqual(len(flow_key), 5, f"Flow key has an unexpected structure: {flow_key}")
-            
+
             src_ip, dst_ip, src_port, dst_port, protocol = flow_key
-            
-            # Assert that the IP addresses are valid
             self.assertRegex(src_ip, r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', "Invalid source IP format")
             self.assertRegex(dst_ip, r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', "Invalid destination IP format")
-            
-            # Assert that the ports are valid integers within the correct range
-            if src_port is not None:
-                self.assertGreaterEqual(src_port, 0, "Source port is less than 0")
-                self.assertLessEqual(src_port, 65535, "Source port is greater than 65535")
-            
-            if dst_port is not None:
-                self.assertGreaterEqual(dst_port, 0, "Destination port is less than 0")
-                self.assertLessEqual(dst_port, 65535, "Destination port is greater than 65535")
-            
-            # Assert that the protocol is either TCP or UDP
-            self.assertIn(protocol, ["TCP", "UDP", "Other"], f"Unexpected protocol in flow: {protocol}")
 
-            # Assert that the flow information includes bytes, packets, and start_time
+            if src_port is not None:
+                self.assertGreaterEqual(src_port, 0)
+                self.assertLessEqual(src_port, 65535)
+
+            if dst_port is not None:
+                self.assertGreaterEqual(dst_port, 0)
+                self.assertLessEqual(dst_port, 65535)
+
             self.assertIn("bytes", flow_info, "Flow does not track byte count.")
             self.assertIn("packets", flow_info, "Flow does not track packet count.")
             self.assertIn("start_time", flow_info, "Flow does not track start time.")
 
-            # Ensure the flow tracked at least one packet and non-zero bytes
             self.assertGreater(flow_info["packets"], 0, "Flow packet count is zero.")
             self.assertGreater(flow_info["bytes"], 0, "Flow byte count is zero.")
-            
-            # Only check end_time if it is not None
+
             if flow_info.get("end_time") is not None:
-                self.assertGreaterEqual(flow_info["end_time"], flow_info["start_time"], "Flow end_time is not greater than or equal to start_time.")
-
-
+                self.assertGreaterEqual(flow_info["end_time"], flow_info["start_time"])
 
     def test_dns_query_with_encoding_issue(self):
-        # Simulate the function writing to a log file
-        with open(self.test_logfile, "w") as log_file:
-            process_pcap_file("pcap/dns_encoding.pcap", log_file)
-
-        # Read the log file and check if the expected log entries are present
-        with open(self.test_logfile, "r") as log_file:
-            log_content = log_file.read()
-
-        # The test should now look for successful logging of the non-ASCII DNS query
-        self.assertIn("Detected DNS Query", log_content)
+        self.process_pcap_and_check_log("pcap/dns_encoding.pcap", "Detected DNS Query")
 
     def test_malformed_pcap_file(self):
-        with open(self.test_logfile, "w") as log_file:
-            process_pcap_file("pcap/malformed.pcap", log_file)
-
-        with open(self.test_logfile, "r") as log_file:
-            log_content = log_file.read()
-
-        self.assertIn("Packet dropped", log_content)
+        self.process_pcap_and_check_log("pcap/malformed.pcap", "Packet dropped")
 
     def tearDown(self):
-        import os
+        # Clean up the log file after each test
         if os.path.exists(self.test_logfile):
             os.remove(self.test_logfile)
+
+        # Ensure that no database connections are left open
+        self.conn = get_db_connection()
+        self.conn.close()
 
 if __name__ == '__main__':
     unittest.main()

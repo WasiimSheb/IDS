@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Intrusion Detection System Dashboard</title>
 
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
 
@@ -16,99 +19,144 @@
 
     <style>
         body {
-            background-color: #f1f1f1;
+            background-color: #f4f6f9;
+            font-family: 'Poppins', sans-serif;
+            color: #333;
         }
 
         .container-fluid {
-            margin-top: 40px;
+            margin-top: 30px;
         }
 
-        .card {
+        h1 {
+            font-weight: 600;
+            font-size: 32px;
+            color: #003366;
             margin-bottom: 20px;
-            background-color: #ffffff;
-            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .chart-container {
-            position: relative;
-            height: 400px;
-            width: 100%;
-        }
-
-        h1,
-        h2 {
-            font-weight: bold;
+            text-align: center;
         }
 
         .stat-box {
             display: flex;
             justify-content: space-between;
+            flex-wrap: wrap;
             margin-bottom: 20px;
         }
 
-        .stat-box .stat {
+        .stat-card {
+            background-color: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+            flex: 1;
+            margin: 10px;
+        }
+
+        .stat-card h3 {
+            font-size: 26px;
+            margin-bottom: 10px;
+            color: #003366;
+        }
+
+        .stat-card p {
+            font-size: 14px;
+            color: #555;
+        }
+
+        .detected-threats h3 {
+            color: #e63946;
+            font-weight: 600;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 65vh;
+        }
+
+        .card {
+            border: none;
+            border-radius: 12px;
             background-color: #ffffff;
-            border-radius: 5px;
-            padding: 15px;
-            text-align: center;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-            transition: background-color 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
         }
 
-        .stat-box .stat:hover {
-            background-color: #e9ecef;
-        }
-
-        .stat-box .stat h3 {
-            font-size: 1.7rem;
-            font-weight: 700;
-            color: #007bff;
-        }
-
-        .detected-threats {
-            color: red;
-            font-weight: bold;
-        }
-
-        /* Add distinct colors to the stat cards */
-        #total-packets {
-            color: #28a745;
-        }
-
-        #total-data {
-            color: #17a2b8;
-        }
-
-        #num-flows {
-            color: #ffc107;
-        }
-
-        #detected-threats {
-            color: red;
-        }
-
-        /* Styling for the table rows */
-        tbody tr:hover {
-            background-color: #f8f9fa;
-            cursor: pointer;
-        }
-
-        /* Pagination button styling */
-        .pagination-container {
+        .data-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
             margin-top: 20px;
-            text-align: center;
+        }
+
+        .data-card {
+            flex: 1;
+            margin: 10px;
+        }
+
+        table {
+            width: 100%;
+            margin-bottom: 10px;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #003366;
+            color: white;
+            border-radius: 5px;
+        }
+
+        td {
+            background-color: #fff;
+            color: #555;
+            border-bottom: 1px solid #f1f1f1;
+        }
+
+        tbody tr:hover {
+            background-color: #f0f4ff;
+        }
+
+        .pagination-container {
+            display: flex;
+            justify-content: center;
+            padding: 20px 0;
         }
 
         .pagination-container .btn {
-            padding: 10px 20px;
-            font-size: 1rem;
-            font-weight: 500;
-            margin: 0 5px;
-            transition: background-color 0.3s ease;
+            padding: 8px 16px;
+            background-color: #003366;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            margin: 0 10px;
         }
 
-        .pagination-container .btn-primary:hover {
-            background-color: #0056b3;
+        .pagination-container .btn:hover {
+            background-color: #0055aa;
+        }
+
+        .flow-stats {
+            background-color: #ffcc00;
+            color: #333;
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .data-row {
+                flex-direction: column;
+            }
         }
     </style>
 </head>
@@ -116,80 +164,95 @@
 <body>
     <div class="container-fluid">
         <!-- Title -->
-        <h1 class="text-center" style="color: #007bff;">Intrusion Detection System Dashboard</h1>
+        <h1>Intrusion Detection System Dashboard</h1>
 
-        <!-- Traffic Statistics -->
-        <div class="stat-box col-md-12">
-            <div class="stat col-md-3">
+        <!-- Stat Cards Row -->
+        <div class="stat-box">
+            <div class="stat-card">
                 <h3 id="total-packets">0</h3>
                 <p>Total Packets</p>
             </div>
-            <div class="stat col-md-3">
+            <div class="stat-card">
                 <h3 id="total-data">0 Bytes</h3>
                 <p>Total Data Transferred</p>
             </div>
-            <div class="stat col-md-3">
+            <div class="stat-card">
                 <h3 id="num-flows">0</h3>
                 <p>Number of Flows</p>
             </div>
-            <div class="stat col-md-3 detected-threats">
+            <div class="stat-card detected-threats">
                 <h3 id="detected-threats">None</h3>
                 <p>Detected Attacks</p>
             </div>
         </div>
 
-        <!-- Traffic Overview Graph and Data Table -->
-        <div class="row">
-            <div class="col-md-8">
-                <div class="card">
-                    <div class="card-body chart-container">
-                        <canvas id="trafficChart"></canvas>
-                    </div>
-                </div>
+        <!-- Chart Section -->
+        <div class="card">
+            <div class="card-body chart-container">
+                <canvas id="trafficChart"></canvas>
             </div>
+        </div>
 
+        <!-- Pagination (Between Chart and Data Tables) -->
+        <div class="pagination-container">
+            <button id="prev-page" class="btn">Previous</button>
+            <span>Page: <span id="currentPage">1</span></span>
+            <button id="next-page" class="btn">Next</button>
+        </div>
+
+        <!-- Real-Time Data & Attack Tables -->
+        <div class="data-row">
             <!-- Real-Time Traffic Data Table -->
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-header" style="background-color: #007bff; color: #fff;">
-                        <h3>Real-Time Traffic Data</h3>
-                    </div>
-                    <div class="card-body">
-                        <!-- Pagination controls -->
-                        <div class="pagination-container text-center mb-3">
-                            <button id="prev-page" class="btn btn-primary">Previous</button>
-                            <button id="next-page" class="btn btn-primary">Next</button>
-                            <p>Page: <span id="currentPage">1</span></p>
-                        </div>
-                        <!-- Data Table -->
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Time</th>
-                                    <th>Bytes Transferred</th>
-                                </tr>
-                            </thead>
-                            <tbody id="traffic_data">
-                                <!-- Data dynamically inserted here -->
-                            </tbody>
-                        </table>
-                    </div>
+            <div class="data-card card">
+                <div class="card-header text-white" style="background-color: #003366;">
+                    Real-Time Traffic Data
+                </div>
+                <div class="card-body">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Src IP</th>
+                                <th>Src Port</th>
+                                <th>Dst IP</th>
+                                <th>Dst Port</th>
+                                <th>Protocol</th>
+                                <th>Bytes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="traffic_data">
+                            <!-- Data dynamically inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Detected Attacks Data Table -->
+            <div class="data-card card">
+                <div class="card-header text-white" style="background-color: #003366;">
+                    Detected Attacks
+                </div>
+                <div class="card-body">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Description</th>
+                                <th>Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attack_data">
+                            <!-- Detected attacks dynamically inserted here -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
 
-        <!-- Flow Statistics (Optional future chart or flow-specific info) -->
-        <div id="flowData" class="my-4">
-            <div class="card">
-                <div class="card-header" style="background-color: #ffc107; color: #333;">
-                    <h3>Flow Statistics</h3>
-                </div>
-                <div class="card-body text-center">
-                    <p id="flow-summary">Flow-specific details can be shown here if needed.</p>
-                </div>
-            </div>
+        <!-- Flow Stats -->
+        <div id="flowData" class="flow-stats">
+            Total Flows: 0, Total Bytes Transferred: 0 Bytes
         </div>
-
     </div>
 
     <!-- jQuery and Bootstrap JS -->
@@ -198,36 +261,28 @@
 
     <!-- Chart.js Script -->
     <script>
-        // Function to update the dashboard stats (Total Packets, Total Data Transferred, etc.)
-        function updateDashboardStats() {
-            $.getJSON('/stats', function (data) {
-                // Update the values in the stats boxes
-                $('#total-packets').text(data.total_packets);
-                $('#total-data').text(`${data.total_data_transferred} Bytes`);
-                $('#num-flows').text(data.num_flows);
-                $('#detected-threats').text(data.detected_attacks || 'None');
-            });
-        }
-
-        // Function to update traffic data and chart
         function updateTrafficData(page) {
-            $.getJSON('/data', { page: page, page_size: pageSize }, function (response) {
+            $.getJSON('/data', { page: page, page_size: 50 }, function (response) {
                 var trafficDataTable = $('#traffic_data');
-                trafficDataTable.empty();  // Clear old data
+                trafficDataTable.empty();
 
                 var labels = [];
                 var dataPoints = [];
 
                 response.data.forEach(function (item) {
-                    // Add data to table
                     var row = '<tr>' +
                         '<td>' + new Date(item.time * 1000).toLocaleString() + '</td>' +
+                        '<td>' + item.src_ip + '</td>' +
+                        '<td>' + item.src_port + '</td>' +
+                        '<td>' + item.dst_ip + '</td>' +
+                        '<td>' + item.dst_port + '</td>' +
+                        '<td>' + item.protocol + '</td>' +
                         '<td>' + item.raw_data + ' Bytes</td>' +
                         '</tr>';
                     trafficDataTable.append(row);
 
-                    // Add data to chart
-                    labels.push(new Date(item.time * 1000));
+                    // Add timestamp as a label in ISO format
+                    labels.push(new Date(item.time * 1000).toISOString());  // Corrected timestamp format
                     dataPoints.push(parseInt(item.raw_data));
                 });
 
@@ -236,64 +291,52 @@
                 trafficChart.data.datasets[0].data = dataPoints;
                 trafficChart.update();
 
-                // Update page number display
                 $('#currentPage').text(page);
             });
         }
 
-        function updateStats() {
-            fetch('/stats')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('total-packets').textContent = data.total_packets;
-                    document.getElementById('total-data').textContent = `${data.total_data_transferred} Bytes`;
-                    document.getElementById('num-flows').textContent = data.num_flows;
-                    document.getElementById('detected-threats').textContent = data.detected_attacks > 0 ? data.detected_attacks : 'None';
-                    if (data.detected_attacks > 0) {
-                        document.getElementById('detected-threats').classList.remove('detected-threats');
-                        document.getElementById('detected-threats').classList.add('detected-threats-active');
-                    }
-                })
-                .catch(error => console.error('Error fetching stats:', error));
-        }
+        function updateAttackData(page) {
+            $.getJSON('/attacks', { page: page, page_size: 32 }, function (response) {
+                var attackDataTable = $('#attack_data');
+                attackDataTable.empty();
 
+                response.attacks.forEach(function (attack) {
+                    var row = '<tr>' +
+                        '<td>' + attack.type + '</td>' +
+                        '<td>' + attack.description + '</td>' +
+                        '<td>' + new Date(attack.timestamp * 1000).toLocaleString() + '</td>' +
+                        '</tr>';
+                    attackDataTable.append(row);
+                });
 
-        // Function to update flow data
-        function updateFlowData() {
-            $.getJSON('/flows', function (data) {
-                $('#flow-summary').text(`Total Flows: ${data.total_flows}, Total Bytes Transferred: ${data.total_bytes} Bytes`);
+                $('#currentPage').text(page);
             });
         }
 
-        // Initialize the first page
-        var currentPage = 1;
-        var pageSize = 50;    // Number of entries per page
-
-        // Initialize Chart with Chart.js
         var ctx = document.getElementById('trafficChart').getContext('2d');
         var trafficChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: [],  // Time labels
+                labels: [],
                 datasets: [{
                     label: 'Bytes Transferred',
-                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                    borderColor: 'rgba(54, 162, 235, 1)',
-                    borderWidth: 2,
+                    backgroundColor: 'rgba(0, 123, 255, 0.2)',
+                    borderColor: 'rgba(0, 123, 255, 1)',
                     fill: false,
-                    data: []  // Traffic data points
+                    data: []
                 }]
             },
             options: {
-                responsive: true,
                 maintainAspectRatio: false,
                 scales: {
                     x: {
                         type: 'time',
                         time: {
-                            unit: 'second',
+                            unit: 'minute',
+                            tooltipFormat: 'MMM dd, yyyy, h:mm:ss a',  // Corrected tooltip format
                             displayFormats: {
-                                second: 'h:mm:ss a'
+                                second: 'h:mm:ss a',  // X-axis tick format
+                                minute: 'h:mm a'
                             }
                         },
                         title: {
@@ -311,37 +354,28 @@
             }
         });
 
+        function updateDashboardStats() {
+            $.getJSON('/stats', function (data) {
+                $('#total-packets').text(data.total_packets);
+                $('#total-data').text(`${data.total_data_transferred} Bytes`);
+                $('#num-flows').text(data.num_flows);
 
-        function loadAttacks() {
-            fetch('/attacks')
-                .then(response => response.json())
-                .then(data => {
-                    const attackCountElement = document.getElementById('detected-threats');
-                    const attackListElement = document.getElementById('attacks-list');
-
-                    // Update the detected threats count
-                    attackCountElement.innerHTML = data.attacks.length;
-
-                    // Clear previous attack list
-                    attackListElement.innerHTML = '';
-
-                    // Populate the attack list
-                    data.attacks.forEach(attack => {
-                        const listItem = document.createElement('li');
-                        listItem.textContent = `${attack.type}: ${attack.description} at ${new Date(attack.timestamp * 1000).toLocaleString()}`;
-                        attackListElement.appendChild(listItem);
-                    });
-                })
-                .catch(error => console.error('Error fetching attacks:', error));
+                let attackText = data.detected_attacks ? data.detected_attacks : 'None';
+                $('#detected-threats').text(attackText);
+            });
         }
 
+        function updateFlowData() {
+            $.getJSON('/flows', function (data) {
+                $('#flowData').text(`Total Flows: ${data.total_flows}, Total Bytes Transferred: ${data.total_bytes} Bytes`);
+            });
+        }
 
-        // Call this function periodically to update the attacks
-        setInterval(loadAttacks, 5000);  // Refresh every 5 seconds
-
-        // Call the functions to update the stats and traffic data
-        updateDashboardStats();
+        // Initial Load
+        var currentPage = 1;
         updateTrafficData(currentPage);
+        updateAttackData(currentPage);
+        updateDashboardStats();
         updateFlowData();
 
         // Pagination controls
@@ -349,22 +383,24 @@
             if (currentPage > 1) {
                 currentPage--;
                 updateTrafficData(currentPage);
+                updateAttackData(currentPage);
             }
         });
 
         $('#next-page').on('click', function () {
             currentPage++;
             updateTrafficData(currentPage);
+            updateAttackData(currentPage);
         });
 
-        // Set an interval to refresh the dashboard stats and data periodically (e.g., every 10 seconds)
+        // Periodic refresh of stats and traffic data
         setInterval(function () {
             updateDashboardStats();
-            updateFlowData();
             updateTrafficData(currentPage);
-        }, 10000);  // 10 seconds
+            updateAttackData(currentPage);
+            updateFlowData();
+        }, 10000);
     </script>
-
 </body>
 
 </html>

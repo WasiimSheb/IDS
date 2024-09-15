@@ -6,9 +6,6 @@ app = Flask(__name__)
 
 # Initialize the database
 def init_db():
-    """
-    Initialize the database and create necessary tables.
-    """
     conn = sqlite3.connect('traffic.db')
     c = conn.cursor()
     
@@ -43,6 +40,11 @@ def init_db():
                     description TEXT,
                     timestamp REAL)''')
     
+    # Add index for performance
+    c.execute("CREATE INDEX IF NOT EXISTS idx_protocol ON flow_data (protocol)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_src_ip ON traffic_data (src_ip)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_dst_ip ON traffic_data (dst_ip)")
+    
     conn.commit()
     conn.close()
 
@@ -50,12 +52,14 @@ def init_db():
 def log_attack(attack_type, description):
     conn = sqlite3.connect('traffic.db')
     c = conn.cursor()
-
-    # Insert detected attack into the database
     c.execute('''INSERT INTO detected_attacks (type, description, timestamp)
                  VALUES (?, ?, ?)''', (attack_type, description, time.time()))
     conn.commit()
     conn.close()
+
+# Helper function to get a database connection
+def get_db_connection():
+    return sqlite3.connect('traffic.db', timeout=30)
 
 # Route to render the main dashboard
 @app.route('/')
@@ -63,45 +67,36 @@ def index():
     return render_template('index.html')
 
 # Route to return paginated traffic data for the frontend
-@app.route('/data')
+@app.route('/data', methods=['GET'])
 def get_data():
-    # Get page and page_size from the query parameters, default to page 1, size 50
     page = int(request.args.get('page', 1))
     page_size = int(request.args.get('page_size', 50))
+    start = (page - 1) * page_size
 
-    offset = (page - 1) * page_size  # Calculate the offset
-
-    conn = sqlite3.connect('traffic.db')
+    conn = get_db_connection()
     c = conn.cursor()
     
-    # Get the total number of rows
-    c.execute("SELECT COUNT(*) FROM traffic_data")
-    total_rows = c.fetchone()[0]
+    c.execute("""
+        SELECT time, src_ip, src_port, dst_ip, dst_port, protocol, raw_data
+        FROM traffic_data
+        LIMIT ?, ?
+    """, (start, page_size))
+    data = c.fetchall()
     
-    # Select the most recent entries with LIMIT and OFFSET for pagination
-    c.execute("SELECT time, src_ip, dst_ip, protocol, src_port, dst_port, raw_data FROM traffic_data ORDER BY time DESC LIMIT ? OFFSET ?", (page_size, offset))
-    rows = c.fetchall()
     conn.close()
 
-    # Convert the rows into a list of dictionaries
-    traffic_data = [
-        {
-            'time': row[0],
-            'src_ip': row[1],
-            'dst_ip': row[2],
-            'protocol': row[3],
-            'src_port': row[4],
-            'dst_port': row[5],
-            'raw_data': len(row[6])  # Size of the raw packet data
-        }
-        for row in rows
-    ]
-
     return jsonify({
-        'data': traffic_data,
-        'total_rows': total_rows,
-        'page': page,
-        'page_size': page_size
+        'data': [
+            {
+                'time': row[0],
+                'src_ip': row[1],
+                'src_port': row[2],
+                'dst_ip': row[3],
+                'dst_port': row[4],
+                'protocol': row[5],
+                'raw_data': len(row[6])
+            } for row in data
+        ]
     })
 
 # Route to return flow statistics for the frontend
@@ -121,7 +116,7 @@ def get_flows():
         'total_bytes': total_bytes if total_bytes else 0
     })
 
-# Route to return general stats (Total Packets, Total Data Transferred, etc.)
+
 @app.route('/stats')
 def get_stats():
     conn = sqlite3.connect('traffic.db')
@@ -131,8 +126,11 @@ def get_stats():
     c.execute("SELECT COUNT(*), SUM(LENGTH(raw_data)) FROM traffic_data")
     total_packets, total_data_transferred = c.fetchone()
 
-    # Get detected attacks from some hypothetical detection mechanism in the flow_data
-    c.execute("SELECT COUNT(*) FROM flow_data WHERE protocol = 'TCP' AND packet_count > 1000")  # Example rule for detected attack
+    # Divide total_data_transferred by 2 to fix double-counting
+    total_data_transferred = total_data_transferred // 2 if total_data_transferred else 0
+
+    # Get detected attacks from detected_attacks table
+    c.execute("SELECT COUNT(*) FROM detected_attacks")
     detected_attacks = c.fetchone()[0]
 
     # Get the number of flows from flow_data
@@ -148,23 +146,38 @@ def get_stats():
         'detected_attacks': detected_attacks if detected_attacks else 0
     })
 
+
+
+# Route to return detected attacks with pagination
 @app.route('/attacks')
 def get_attacks():
-    conn = sqlite3.connect('traffic.db')
-    c = conn.cursor()
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
 
-    # Query the detected attacks
-    c.execute('SELECT type, description, timestamp FROM detected_attacks ORDER BY timestamp DESC')
-    rows = c.fetchall()
-    conn.close()
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('page_size', 50))
+        offset = (page - 1) * page_size
 
-    # Convert the rows into a list of dictionaries
-    attack_data = [{'type': row[0], 'description': row[1], 'timestamp': row[2]} for row in rows]
+        c.execute('SELECT type, description, timestamp FROM detected_attacks ORDER BY timestamp DESC LIMIT ? OFFSET ?', (page_size, offset))
+        rows = c.fetchall()
+
+        attack_data = [{'type': row['type'], 'description': row['description'], 'timestamp': row['timestamp']} for row in rows]
+
+    except sqlite3.OperationalError as e:
+        print(f"Database error: {e}")
+        return jsonify({'error': 'Database is locked or unavailable'}), 500
+
+    finally:
+        conn.close()
 
     return jsonify({
-        'attacks': attack_data
+        'attacks': attack_data,
+        'page': page,
+        'page_size': page_size
     })
 
 if __name__ == '__main__':
-    init_db()  # Ensure tables are created before app starts
+    init_db()
     app.run(debug=True, host='0.0.0.0')
