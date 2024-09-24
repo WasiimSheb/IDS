@@ -1,19 +1,31 @@
 import sqlite3
 import time
 from scapy.all import IP, TCP, UDP, raw
+from concurrent.futures import ThreadPoolExecutor
+import threading
+import queue
 
 # Global batch to store packets before inserting them in the database
-BATCH_SIZE = 100
+BATCH_SIZE = 100  # Keep batch size manageable to avoid issues
+PACKET_FLUSH_INTERVAL = 50  # Flush packets to database after every 50 batches
 packet_batch = []
 flow_table = {}  # Dictionary to store flows
 time_offset = 0  # Global variable to increment time for each packet
+executor = ThreadPoolExecutor(max_workers=2)  # Use for asynchronous database writes
+packet_commit_count = 0
+
+# Attack logging queue for async processing
+log_queue = queue.Queue()
 
 def get_db_connection():
     """
-    Establish a connection to the SQLite database with WAL mode enabled.
+    Establish a new connection to the SQLite database with WAL mode enabled.
+    Each thread will create its own connection.
     """
     conn = sqlite3.connect('traffic.db', timeout=30)
-    conn.execute('PRAGMA journal_mode=WAL')  # Ensure WAL mode is active
+    conn.execute('PRAGMA journal_mode=WAL')  # Enable Write-Ahead Logging for better concurrency
+    conn.execute('PRAGMA synchronous = NORMAL')  # Tuning for better performance
+    conn.execute('PRAGMA temp_store = MEMORY')  # Store temporary tables in memory for faster access
     conn.execute('PRAGMA busy_timeout = 5000')  # Wait 5000 milliseconds if the database is locked
     return conn
 
@@ -64,7 +76,7 @@ def store_packet_data(packet):
     """
     Store packet information in a batch and update flow information.
     """
-    global packet_batch, flow_table, time_offset
+    global packet_batch, flow_table, time_offset, packet_commit_count
 
     # Extract packet details
     ip_layer = packet[IP]
@@ -88,107 +100,105 @@ def store_packet_data(packet):
 
     # Check if the flow already exists
     if flow_id not in flow_table:
-        # If it's a new flow, initialize it
         flow_table[flow_id] = {
             'packet_count': 1,
-            'total_bytes': packet_size,  # Store the correct size of the packet
+            'total_bytes': packet_size,
             'start_time': current_time,
             'end_time': current_time
         }
     else:
-        # Update the existing flow
         flow_table[flow_id]['packet_count'] += 1
-        flow_table[flow_id]['total_bytes'] += packet_size  # Accumulate packet size correctly
+        flow_table[flow_id]['total_bytes'] += packet_size
         flow_table[flow_id]['end_time'] = current_time
 
-    # If the batch size reaches BATCH_SIZE, commit them to the database
+    # Commit the data after every batch size
     if len(packet_batch) >= BATCH_SIZE:
-        _commit_packet_batch()
-
+        packet_commit_count += 1
+        if packet_commit_count % PACKET_FLUSH_INTERVAL == 0:
+            _commit_packet_batch_async()
+        else:
+            _commit_packet_batch()
 
 def _commit_packet_batch():
     """
     Commit the batch of packets to the database and update flows.
+    Each thread will open a new connection to commit the data.
     """
     global packet_batch, flow_table
 
-    # Skip if there's nothing to commit
     if not packet_batch:
         return
 
-    conn = sqlite3.connect('traffic.db')
-    c = conn.cursor()
+    conn = get_db_connection()
+    try:
+        c = conn.cursor()
 
-    # Insert packet data into traffic_data table
-    c.executemany('''INSERT INTO traffic_data 
-                     (time, src_ip, dst_ip, protocol, src_port, dst_port, raw_data) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?)''', packet_batch)
+        # Insert packet data into traffic_data table using bulk insert
+        c.executemany('''INSERT INTO traffic_data 
+                         (time, src_ip, dst_ip, protocol, src_port, dst_port, raw_data) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?)''', packet_batch)
 
-    # Insert or update flow data in flow_data table
-    for flow_id, flow_info in flow_table.items():
-        src_ip, dst_ip, src_port, dst_port, protocol = flow_id
-        c.execute('''INSERT OR REPLACE INTO flow_data
-                     (src_ip, dst_ip, src_port, dst_port, protocol, packet_count, total_bytes, start_time, end_time)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
-                     (src_ip, dst_ip, src_port, dst_port, protocol, 
-                      flow_info['packet_count'], flow_info['total_bytes'],
-                      flow_info['start_time'], flow_info['end_time']))
+        # Insert or update flow data in flow_data table using bulk insert
+        for flow_id, flow_info in flow_table.items():
+            src_ip, dst_ip, src_port, dst_port, protocol = flow_id
+            c.execute('''INSERT OR REPLACE INTO flow_data
+                         (src_ip, dst_ip, src_port, dst_port, protocol, packet_count, total_bytes, start_time, end_time)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                         (src_ip, dst_ip, src_port, dst_port, protocol,
+                          flow_info['packet_count'], flow_info['total_bytes'],
+                          flow_info['start_time'], flow_info['end_time']))
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+    except Exception as e:
+        print(f"Error committing batch: {e}")
+    finally:
+        conn.close()
 
     # Clear the batch after committing
     packet_batch = []
     flow_table = {}
 
+def _commit_packet_batch_async():
+    """
+    Commit the packet batch asynchronously by creating a new connection in each thread.
+    """
+    executor.submit(_commit_packet_batch)
+
 def flush_packet_batch():
     """
     Flush any remaining packets in the batch to the database.
     """
+    print("Flushing remaining packets to the database.")
     _commit_packet_batch()
-
-def get_flow_statistics():
-    """
-    Query the database for flow statistics.
-    """
-    conn = get_db_connection()
-    c = conn.cursor()
-
-    # Retrieve total number of flows and total bytes transferred
-    c.execute('SELECT COUNT(*), SUM(total_bytes) FROM flow_data')
-    result = c.fetchone()
-    total_flows = result[0] if result[0] else 0
-    total_bytes = result[1] if result[1] else 0
-
-    conn.close()
-    return total_flows, total_bytes
 
 def log_attack(attack_type, description):
     """
-    Log an attack in the detected_attacks table.
+    Log an attack in the detected_attacks table asynchronously by creating a new connection for each log.
     """
-    conn = sqlite3.connect('traffic.db')
-    c = conn.cursor()
+    log_queue.put((attack_type, description))
 
-    # Insert detected attack with correct UNIX timestamp (in seconds)
-    c.execute('''INSERT INTO detected_attacks (type, description, timestamp)
-                 VALUES (?, ?, ?)''', (attack_type, description, time.time()))  # time.time() returns a float (seconds)
-    conn.commit()
-    conn.close()
-
-# Additional Debugging Route to Check Stored Data
-def get_packet_data():
+def _process_log_queue():
     """
-    Retrieve all packet data from the traffic_data table for debugging.
+    Continuously process log attack requests from the queue.
+    Each log entry is processed using a separate database connection.
     """
-    conn = get_db_connection()
-    c = conn.cursor()
+    while True:
+        attack_type, description = log_queue.get()  # Blocks until an item is available
+        conn = get_db_connection()
+        try:
+            c = conn.cursor()
+            c.execute('''INSERT INTO detected_attacks (type, description, timestamp)
+                         VALUES (?, ?, ?)''', (attack_type, description, time.time()))
+            conn.commit()
+        except Exception as e:
+            print(f"Error logging attack: {e}")
+        finally:
+            conn.close()
+        log_queue.task_done()
 
-    try:
-        c.execute('SELECT * FROM traffic_data')
-        return c.fetchall()  # Return all rows for debugging
-    finally:
-        conn.close()
+# Start the async attack logging processor
+attack_log_thread = threading.Thread(target=_process_log_queue, daemon=True)
+attack_log_thread.start()
 
 if __name__ == "__main__":
     # Initialize the database and tables
@@ -196,7 +206,3 @@ if __name__ == "__main__":
 
     # Flush any pending packet data
     flush_packet_batch()
-
-    # Print packet data for debugging
-    packets = get_packet_data()
-    print("Stored Packets:", packets)

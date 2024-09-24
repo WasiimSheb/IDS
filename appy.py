@@ -1,7 +1,6 @@
 from flask import Flask, render_template, jsonify, request
 import sqlite3
 import time
-
 app = Flask(__name__)
 
 # Initialize the database

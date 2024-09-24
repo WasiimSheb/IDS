@@ -3,28 +3,32 @@ import time
 import unittest
 import os
 import sqlite3
-from scapy.all import IP, TCP, raw  # Import IP, TCP, and raw from Scapy
-from IDS import process_pcap_file, validate_ip_packet, validate_tcp_packet
+from scapy.all import IP, TCP, raw
+from IDS import process_pcap_file  # Import high-level functions from IDS.py
+from packet_validation import validate_ip_packet, validate_tcp_packet  # Import from packet_validation
 from shared import flows
-from db_utils import get_db_connection  # Assuming you have a db_utils module
+from db_utils import get_db_connection
+from logging_utils import flush_logs, log_to_file  # Correct the import for logging
+
 
 class TestIntrusionDetection(unittest.TestCase):
 
     def setUp(self):
-        # Ensure a fresh log file for each test
         self.test_logfile = "test_log.txt"
         
-        # Set up the database connection with timeout
+        # Set up database connection for testing
         self.conn = get_db_connection()
-        self.conn.execute('PRAGMA busy_timeout = 5000')  # 5 seconds timeout if locked
-        self.conn.execute('PRAGMA journal_mode=WAL')  # Ensure WAL mode is enabled
+        self.conn.execute('PRAGMA busy_timeout = 5000')
+        self.conn.execute('PRAGMA journal_mode=WAL')
         self.conn.commit()
-        self.conn.close()  # Ensure no open connection between tests
+        self.conn.close()
 
     def process_pcap_and_check_log(self, pcap_file, expected_log_message, not_in_log=False):
         """Helper function to process a PCAP file and check for a specific log message."""
         with open(self.test_logfile, "w") as log_file:
             process_pcap_file(pcap_file, log_file)
+
+        flush_logs(self.test_logfile)
 
         with open(self.test_logfile, "r") as log_file:
             log_content = log_file.read()
@@ -69,7 +73,7 @@ class TestIntrusionDetection(unittest.TestCase):
         """Test detection of TCP packets with invalid checksums."""
         packet = IP(src="192.168.1.1", dst="192.168.1.2", ihl=5, ttl=64) / TCP()
 
-        # Manually set an invalid checksum (0xFFFF) to simulate the issue
+        # Manually set an invalid checksum (0xFFFF) to simulate the i ?ssue
         packet[TCP].chksum = 0xFFFF
         packet = IP(raw(packet))
 
@@ -120,13 +124,9 @@ class TestIntrusionDetection(unittest.TestCase):
         self.process_pcap_and_check_log("pcap/malformed.pcap", "Packet dropped")
 
     def tearDown(self):
-        # Clean up the log file after each test
+        flush_logs(self.test_logfile)
         if os.path.exists(self.test_logfile):
             os.remove(self.test_logfile)
-
-        # Ensure that no database connections are left open
-        self.conn = get_db_connection()
-        self.conn.close()
 
 if __name__ == '__main__':
     unittest.main()

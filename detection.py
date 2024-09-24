@@ -260,4 +260,3 @@ def detect_slowloris(packet, log_file):
         if slowloris_tracker[src_ip] > SLOWLORIS_THRESHOLD:
             message = f"Slowloris attack detected from {src_ip}: {slowloris_tracker[src_ip]} half-open connections."
             log_attack_and_file(log_file, message, "Slowloris Attack")
-
