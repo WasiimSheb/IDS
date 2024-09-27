@@ -1,0 +1,25 @@
+version: '3'
+
+services:
+  ids-system:
+    build:
+      context: .
+      dockerfile: Dockerfile.ids
+    stdin_open: true # Keep stdin open to allow interaction
+    tty: true        # Allocate a pseudo-TTY
+    volumes:
+      - shared-db:/app/db
+
+  web-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    ports:
+      - "5000:5000"
+    volumes:
+      - shared-db:/app/db
+    command: python3 appy.py
+
+volumes:
+  shared-db:
+    driver: local

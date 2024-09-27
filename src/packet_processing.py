@@ -3,13 +3,14 @@ import time
 from scapy.all import IP, TCP, UDP, DNS
 from collections import defaultdict
 from packet_validation import validate_ip_packet, validate_tcp_packet, validate_udp_packet
-from logging_utils import log_to_file
+from logging_utils import log_to_txt_file
+from db_utils import log_attack
 from detection import (
     detect_file_transfer_protocols, detect_port_scan, detect_syn_flood,
     detect_http_covert_channel, detect_icmp_data_exfiltration, detect_slowloris,
     detect_dns_amplification, detect_excessive_dns_queries, detect_dns_exfiltration, detect_traffic_anomalies
 )
-from db_utils import store_packet_data, log_attack  # Database function for storing packet data and logging attacks
+from db_utils import store_packet_data  # Database function for storing packet data and logging attacks
 from shared import flows
 
 # Default thresholds
@@ -28,23 +29,23 @@ def process_packet(packet, log_file):
     """
     try:
         if not IP in packet:
-            log_to_file(log_file, "Packet dropped: Not an IP packet")
+            log_to_txt_file(log_file, "Packet dropped: Not an IP packet")
             return
 
         is_valid, msg = validate_ip_packet(packet)
         if not is_valid:
-            log_to_file(log_file, f"Packet dropped: {msg}")
+            log_to_txt_file(log_file, f"Packet dropped: {msg}")
             return
 
         if TCP in packet:
             is_valid, msg = validate_tcp_packet(packet)
             if not is_valid:
-                log_to_file(log_file, f"Packet dropped: {msg}")
+                log_to_txt_file(log_file, f"Packet dropped: {msg}")
                 return
         elif UDP in packet:
             is_valid, msg = validate_udp_packet(packet)
             if not is_valid:
-                log_to_file(log_file, f"Packet dropped: {msg}")
+                log_to_txt_file(log_file, f"Packet dropped: {msg}")
                 return
 
         # Extract flow information
@@ -75,7 +76,7 @@ def process_packet(packet, log_file):
         flows[flow_key]["end_time"] = time.time()
 
         # Log the flow data
-        log_to_file(log_file, f"Flow: {flow_key}, Data Transferred: {flows[flow_key]['bytes']} bytes")
+        log_to_txt_file(log_file, f"Flow: {flow_key}, Data Transferred: {flows[flow_key]['bytes']} bytes")
 
         # Detection calls for intrusion detection mechanisms
         detect_file_transfer_protocols(flow_key, log_file)
@@ -89,7 +90,7 @@ def process_packet(packet, log_file):
 
         # Check for large outbound data transfer (possible data exfiltration)
         if flows[flow_key]["bytes"] > data_exfiltration_threshold:
-            log_to_file(log_file, f"Potential Data Exfiltration Detected: Flow {flow_key}, Bytes transferred: {flows[flow_key]['bytes']}")
+            log_to_txt_file(log_file, f"Potential Data Exfiltration Detected: Flow {flow_key}, Bytes transferred: {flows[flow_key]['bytes']}")
             log_attack("Data Exfiltration", f"Flow {flow_key} transferred {flows[flow_key]['bytes']} bytes")
 
         # Detect traffic anomalies based on historical averages
@@ -100,7 +101,7 @@ def process_packet(packet, log_file):
 
     except Exception as e:
         # Log any errors that occur during packet processing
-        log_to_file(log_file, f"Error processing packet: {str(e)}")
+        log_to_txt_file(log_file, f"Error processing packet: {str(e)}")
 
 
 def process_dns_query(packet, log_file):
@@ -117,14 +118,14 @@ def process_dns_query(packet, log_file):
                     try:
                         query_name = question.qname.decode('utf-8')
                     except UnicodeDecodeError:
-                        log_to_file(log_file, "Decoding issue: Non-ASCII character found in DNS query name.", level="WARNING")
+                        log_to_txt_file(log_file, "Decoding issue: Non-ASCII character found in DNS query name.", level="WARNING")
                         decoding_issue = True
             except Exception as e:
-                log_to_file(log_file, f"Error processing DNS query: {str(e)}", level="ERROR")
+                log_to_txt_file(log_file, f"Error processing DNS query: {str(e)}", level="ERROR")
 
             detect_excessive_dns_queries(packet, log_file)
             detect_dns_exfiltration(packet, log_file)
             if decoding_issue:
-                log_to_file(log_file, "Decoding issue: DNS tunneling detection proceeded with potential partial query.", level="WARNING")
+                log_to_txt_file(log_file, "Decoding issue: DNS tunneling detection proceeded with potential partial query.", level="WARNING")
         else:
-            log_to_file(log_file, "DNS packet dropped: No valid query domain found.", level="WARNING")
+            log_to_txt_file(log_file, "DNS packet dropped: No valid query domain found.", level="WARNING")

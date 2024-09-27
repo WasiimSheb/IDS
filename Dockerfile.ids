@@ -1,18 +1,23 @@
-# Base image
-FROM python:3.8-slim
+FROM python:3.9-slim
+
+# Install necessary dependencies
+RUN apt-get update && \
+    apt-get install -y tcpdump tcpreplay sqlite3 && \
+    apt-get clean
 
 # Set the working directory
 WORKDIR /app
 
-# Copy the requirements file and install dependencies
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+# Copy your source code and pcap files into the container
+COPY src/ /app/
+COPY pcap/ /app/pcap/
+COPY logs/ /app/logs/
 
-# Copy the application code
-COPY . .
+# Copy the startup script
+COPY start_services.sh /app/
 
-# Expose Flask's port
-EXPOSE 5000
+# Make the startup script executable
+RUN chmod +x /app/start_services.sh && mkdir -p /app/db && chmod -R 777 /app/db
 
-# Command to run the Flask app
-CMD ["python", "app.py"]
+# Set the default command to run an interactive shell or idle state
+CMD ["/bin/sh"]

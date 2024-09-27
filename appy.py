@@ -1,11 +1,15 @@
 from flask import Flask, render_template, jsonify, request
 import sqlite3
 import time
+
+from shared import DIR
 app = Flask(__name__)
+
+
 
 # Initialize the database
 def init_db():
-    conn = sqlite3.connect('traffic.db')
+    conn = sqlite3.connect(DIR)
     c = conn.cursor()
     
     # Table for storing packet data
@@ -49,7 +53,7 @@ def init_db():
 
 # Log an attack into the detected_attacks table
 def log_attack(attack_type, description):
-    conn = sqlite3.connect('traffic.db')
+    conn = sqlite3.connect(DIR)
     c = conn.cursor()
     c.execute('''INSERT INTO detected_attacks (type, description, timestamp)
                  VALUES (?, ?, ?)''', (attack_type, description, time.time()))
@@ -58,7 +62,7 @@ def log_attack(attack_type, description):
 
 # Helper function to get a database connection
 def get_db_connection():
-    return sqlite3.connect('traffic.db', timeout=30)
+    return sqlite3.connect(DIR, timeout=30)
 
 # Route to render the main dashboard
 @app.route('/')
@@ -101,7 +105,7 @@ def get_data():
 # Route to return flow statistics for the frontend
 @app.route('/flows')
 def get_flows():
-    conn = sqlite3.connect('traffic.db')
+    conn = sqlite3.connect(DIR)
     c = conn.cursor()
 
     # Calculate total flows and total bytes transferred from the flow_data table
@@ -118,7 +122,7 @@ def get_flows():
 
 @app.route('/stats')
 def get_stats():
-    conn = sqlite3.connect('traffic.db')
+    conn = sqlite3.connect(DIR)
     c = conn.cursor()
 
     # Get total packets and total data transferred from traffic_data

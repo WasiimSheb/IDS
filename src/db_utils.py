@@ -5,6 +5,8 @@ from concurrent.futures import ThreadPoolExecutor
 import threading
 import queue
 
+from shared import DIR
+
 # Global batch to store packets before inserting them in the database
 BATCH_SIZE = 100  # Keep batch size manageable to avoid issues
 PACKET_FLUSH_INTERVAL = 50  # Flush packets to database after every 50 batches
@@ -17,12 +19,26 @@ packet_commit_count = 0
 # Attack logging queue for async processing
 log_queue = queue.Queue()
 
+import os
+import sqlite3
+
+
+
+# Set the absolute path to the shared database location
+DB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), DIR)
+DB_PATH = os.path.join(DB_DIR, 'traffic.db')
+
 def get_db_connection():
     """
     Establish a new connection to the SQLite database with WAL mode enabled.
-    Each thread will create its own connection.
+    Ensure the database directory exists.
     """
-    conn = sqlite3.connect('traffic.db', timeout=30)
+    # Ensure the database directory exists
+    if not os.path.exists(DB_DIR):
+        os.makedirs(DB_DIR)  # Create the directory if it doesn't exist
+    
+    # Connect to the SQLite database
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.execute('PRAGMA journal_mode=WAL')  # Enable Write-Ahead Logging for better concurrency
     conn.execute('PRAGMA synchronous = NORMAL')  # Tuning for better performance
     conn.execute('PRAGMA temp_store = MEMORY')  # Store temporary tables in memory for faster access
@@ -138,8 +154,11 @@ def _commit_packet_batch():
                          (time, src_ip, dst_ip, protocol, src_port, dst_port, raw_data) 
                          VALUES (?, ?, ?, ?, ?, ?, ?)''', packet_batch)
 
+        # Iterate over a copy of flow_table to avoid modification during iteration
+        flow_table_copy = flow_table.copy()
+
         # Insert or update flow data in flow_data table using bulk insert
-        for flow_id, flow_info in flow_table.items():
+        for flow_id, flow_info in flow_table_copy.items():
             src_ip, dst_ip, src_port, dst_port, protocol = flow_id
             c.execute('''INSERT OR REPLACE INTO flow_data
                          (src_ip, dst_ip, src_port, dst_port, protocol, packet_count, total_bytes, start_time, end_time)
@@ -157,6 +176,7 @@ def _commit_packet_batch():
     # Clear the batch after committing
     packet_batch = []
     flow_table = {}
+
 
 def _commit_packet_batch_async():
     """
@@ -199,10 +219,3 @@ def _process_log_queue():
 # Start the async attack logging processor
 attack_log_thread = threading.Thread(target=_process_log_queue, daemon=True)
 attack_log_thread.start()
-
-if __name__ == "__main__":
-    # Initialize the database and tables
-    init_db()
-
-    # Flush any pending packet data
-    flush_packet_batch()

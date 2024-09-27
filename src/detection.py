@@ -1,11 +1,10 @@
 import time
 import chardet
-import json
 from collections import defaultdict, deque  # Import deque
 import ipaddress
-from db_utils import log_attack
 from shared import flows  # Import flows from shared.py
 from scapy.all import IP, TCP, UDP, ICMP, DNS
+from logging_utils import write_logs
 
 # Trackers to hold state information for ICMP, DNS, SYN flood, and port scans
 icmp_tracker = defaultdict(lambda: deque(maxlen=100))  # Track the last 100 ICMP packets
@@ -36,26 +35,6 @@ DETECTION_CONFIG = {
     "query_length_threshold": 50,
 }
 
-# Helper functions
-def log_to_file(log_file, message, attack_type=None):
-    """
-    Log messages to the file, handling special encoding issues.
-    Logs can be in structured JSON format to include metadata like attack types.
-    """
-    log_entry = {
-        "message": message,
-        "timestamp": time.time(),
-        "attack_type": attack_type
-    }
-    log_file.write(json.dumps(log_entry) + "\n")
-    log_file.flush()
-
-def log_attack_and_file(log_file, message, attack_type):
-    """
-    Helper function to log an attack to both the log file and the database.
-    """
-    log_to_file(log_file, message, attack_type)
-    log_attack(attack_type, message)
 
 def is_internal_ip(ip):
     """Determine if the IP address is private (internal)."""
@@ -91,13 +70,13 @@ def detect_icmp_data_exfiltration(packet, log_file):
 
             if packet_count > config['icmp_packet_threshold']:
                 message = f"Suspicious ICMP traffic: {packet_count} packets from {src_ip} to {dst_ip} in {config['icmp_time_window']} seconds."
-                log_attack_and_file(log_file, message, "ICMP Data Exfiltration")
+                write_logs(log_file, message, "ICMP Data Exfiltration")
             if total_data_sent > config['icmp_total_data_threshold']:
                 message = f"Suspicious ICMP traffic: {total_data_sent} bytes from {src_ip} to {dst_ip} in {config['icmp_time_window']} seconds."
-                log_attack_and_file(log_file, message, "ICMP Data Exfiltration")
+                write_logs(log_file, message, "ICMP Data Exfiltration")
             if payload_size > config['icmp_payload_threshold']:
                 message = f"Suspicious ICMP traffic: Large packet ({payload_size} bytes) from {src_ip} to {dst_ip}."
-                log_attack_and_file(log_file, message, "ICMP Data Exfiltration")
+                write_logs(log_file, message, "ICMP Data Exfiltration")
 
 def detect_excessive_dns_queries(packet, log_file):
     """Detect excessive DNS queries in a short time window."""
@@ -108,19 +87,19 @@ def detect_excessive_dns_queries(packet, log_file):
         encoding = detected_encoding.get('encoding', 'utf-8')
 
         message = f"Detected DNS Query: {query_raw} with encoding {encoding}"
-        log_attack_and_file(log_file, message, "DNS Query")
+        write_logs(log_file, message, "DNS Query")
 
         try:
             # Try decoding the query name with detected encoding
             query = query_raw.decode(encoding)
             message = f"Decoded DNS Query: {query}"
-            log_attack_and_file(log_file, message, "DNS Query")
+            write_logs(log_file, message, "DNS Query")
         except (UnicodeDecodeError, TypeError):
             # If decoding fails, decode with 'utf-8' and log the issue
             query = query_raw.decode('utf-8', errors="replace")
-            log_to_file(log_file, "Decoding issue: Non-ASCII character found in DNS query name.")
+            write_logs(log_file, "Decoding issue: Non-ASCII character found in DNS query name.")
             message = f"Replaced non-ASCII DNS Query: {query}"
-            log_attack_and_file(log_file, message, "DNS Query")
+            write_logs(log_file, message, "DNS Query")
 
         src_ip = packet[IP].src
         dns_tracker[src_ip].append(time.time())
@@ -131,14 +110,14 @@ def detect_excessive_dns_queries(packet, log_file):
         # Log excessive DNS queries if threshold is exceeded
         if len(dns_tracker[src_ip]) > config['dns_query_threshold']:
             message = f"Excessive DNS Queries Detected: {src_ip} made {len(dns_tracker[src_ip])} DNS queries in {config['dns_time_window']} seconds."
-            log_attack_and_file(log_file, message, "DNS Query")
+            write_logs(log_file, message, "DNS Query")
 
 def detect_file_transfer_protocols(flow_key, log_file):
     """Detect unauthorized file transfers (e.g., FTP, SFTP)."""
     src_ip, dst_ip, src_port, dst_port, protocol = flow_key
     if protocol == "TCP" and (dst_port in [21, 22] or src_port in [21, 22]):
         message = f"Unauthorized File Transfer Detected: {src_ip} to {dst_ip}. File transfer protocol on port {dst_port if dst_port in [21, 22] else src_port}"
-        log_attack_and_file(log_file, message, "File Transfer")
+        write_logs(log_file, message, "File Transfer")
 
 def detect_http_covert_channel(packet, log_file):
     """Detect covert channels through HTTP headers."""
@@ -157,7 +136,7 @@ def detect_http_covert_channel(packet, log_file):
 
             if len(user_agent_value) > config['user_agent_length_threshold']:
                 message = f"Intrusion Detected: HTTP Covert Channel Detected in User-Agent: {user_agent_value}"
-                log_attack_and_file(log_file, message, "HTTP Covert Channel")
+                write_logs(log_file, message, "HTTP Covert Channel")
 
 def detect_syn_flood(packet, log_file):
     """Detect SYN flood attacks."""
@@ -168,7 +147,7 @@ def detect_syn_flood(packet, log_file):
 
         if syn_flood_tracker[src_ip] > config['syn_flood_threshold']:
             message = f"Intrusion Detected: SYN flood detected from {src_ip}"
-            log_attack_and_file(log_file, message, "SYN Flood")
+            write_logs(log_file, message, "SYN Flood")
 
 def detect_dns_exfiltration(packet, log_file):
     """Detect DNS exfiltration attacks."""
@@ -183,12 +162,12 @@ def detect_dns_exfiltration(packet, log_file):
         except (UnicodeDecodeError, TypeError):
             query = query_raw.decode('utf-8', errors="replace")
             message = f"Decoding issue with {encoding}, replaced invalid characters in query: {query}"
-            log_attack_and_file(log_file, message, "DNS Exfiltration")
+            write_logs(log_file, message, "DNS Exfiltration")
 
         # Check for unusually long domain names
         if len(query) > config['query_length_threshold']:
             message = f"Intrusion Detected: Possible DNS exfiltration in query {query}"
-            log_attack_and_file(log_file, message, "DNS Exfiltration")
+            write_logs(log_file, message, "DNS Exfiltration")
 
 def detect_port_scan(src_ip, dst_port, packet_time, log_file):
     """Detect port scanning activities."""
@@ -206,7 +185,7 @@ def detect_port_scan(src_ip, dst_port, packet_time, log_file):
     # Check if the number of unique ports exceeds the threshold
     if len(scanning_ips[src_ip]["ports"]) > config['port_scan_threshold']:
         message = f"Intrusion Detected: Port scanning detected from {src_ip}"
-        log_attack_and_file(log_file, message, "Port Scan")
+        write_logs(log_file, message, "Port Scan")
 
 def detect_traffic_anomalies(flow_key, log_file):
     """Detect traffic anomalies based on historical averages."""
@@ -223,7 +202,7 @@ def detect_traffic_anomalies(flow_key, log_file):
         # Check if current traffic exceeds 2 times the average, indicating an anomaly
         if current_traffic > 2 * avg_traffic:
             message = f"Traffic Anomaly Detected: {src_ip} shows sudden traffic spike. Current: {current_traffic}, Avg: {avg_traffic}"
-            log_attack_and_file(log_file, message, "Traffic Anomaly")
+            write_logs(log_file, message, "Traffic Anomaly")
 
 
 def detect_dns_amplification(packet, log_file):
@@ -245,7 +224,7 @@ def detect_dns_amplification(packet, log_file):
 
             if response_sizes and query_sizes and (max(response_sizes) > 3 * max(query_sizes)):
                 message = f"DNS Amplification Attack Detected: {dst_ip} received large responses."
-                log_attack_and_file(log_file, message, "DNS Amplification Attack")
+                write_logs(log_file, message, "DNS Amplification Attack")
 
             # Clear the tracker after detection
             dns_amplification_tracker[dst_ip] = []
@@ -259,4 +238,4 @@ def detect_slowloris(packet, log_file):
 
         if slowloris_tracker[src_ip] > SLOWLORIS_THRESHOLD:
             message = f"Slowloris attack detected from {src_ip}: {slowloris_tracker[src_ip]} half-open connections."
-            log_attack_and_file(log_file, message, "Slowloris Attack")
+            write_logs(log_file, message, "Slowloris Attack")

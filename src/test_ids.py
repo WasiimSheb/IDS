@@ -1,19 +1,26 @@
-import logging
-import time
 import unittest
 import os
-import sqlite3
 from scapy.all import IP, TCP, raw
 from IDS import process_pcap_file  # Import high-level functions from IDS.py
 from packet_validation import validate_ip_packet, validate_tcp_packet  # Import from packet_validation
 from shared import flows
-from db_utils import get_db_connection
-from logging_utils import flush_logs, log_to_file  # Correct the import for logging
+from db_utils import get_db_connection, init_db
+from logging_utils import flush_logs  # Correct the import for logging
 
 
 class TestIntrusionDetection(unittest.TestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        """
+        This method will be run once before all the tests. It ensures the database is initialized.
+        """
+        # Initialize the database and create tables
+        init_db()
+
+    
     def setUp(self):
+        
         self.test_logfile = "test_log.txt"
         
         # Set up database connection for testing
@@ -39,28 +46,28 @@ class TestIntrusionDetection(unittest.TestCase):
                 self.assertIn(expected_log_message, log_content)
 
     def test_syn_flood(self):
-        self.process_pcap_and_check_log("pcap/syn_flood.pcap", "Intrusion Detected: SYN flood detected")
+        self.process_pcap_and_check_log("../pcap/syn_flood.pcap", "Intrusion Detected: SYN flood detected")
 
     def test_port_scan(self):
-        self.process_pcap_and_check_log("pcap/portscan.pcap", "Intrusion Detected: Port scanning detected")
+        self.process_pcap_and_check_log("../pcap/portscan.pcap", "Intrusion Detected: Port scanning detected")
 
     def test_port_scan2(self):
-        self.process_pcap_and_check_log("pcap/portscan1.pcap", "Intrusion Detected: Port scanning detected")
+        self.process_pcap_and_check_log("../pcap/portscan1.pcap", "Intrusion Detected: Port scanning detected")
 
     def test_ftp_exfiltration(self):
-        self.process_pcap_and_check_log("pcap/ftp.pcap", "Unauthorized File Transfer Detected")
+        self.process_pcap_and_check_log("../pcap/ftp.pcap", "Unauthorized File Transfer Detected")
 
     def test_dns_tunneling(self):
-        self.process_pcap_and_check_log("pcap/dns.pcap", "Intrusion Detected: Possible DNS exfiltration")
+        self.process_pcap_and_check_log("../pcap/dns.pcap", "Intrusion Detected: Possible DNS exfiltration")
 
     def test_http_covert_channel(self):
-        self.process_pcap_and_check_log("pcap/http_covert_channel.pcap", "Intrusion Detected: HTTP Covert Channel Detected")
+        self.process_pcap_and_check_log("../pcap/http_covert_channel.pcap", "Intrusion Detected: HTTP Covert Channel Detected")
 
     def test_icmp_exfiltration(self):
-        self.process_pcap_and_check_log("pcap/icmp_large.pcap", "Suspicious ICMP traffic")
+        self.process_pcap_and_check_log("../pcap/icmp_large.pcap", "Suspicious ICMP traffic")
 
     def test_icmp_normal(self):
-        self.process_pcap_and_check_log("pcap/icmp_normal.pcap", "Suspicious ICMP traffic", not_in_log=True)
+        self.process_pcap_and_check_log("../pcap/icmp_normal.pcap", "Suspicious ICMP traffic", not_in_log=True)
 
     def test_invalid_ip_packet(self):
         """Test handling of malformed IP packets."""
@@ -88,7 +95,7 @@ class TestIntrusionDetection(unittest.TestCase):
 
     def test_flow_tracking(self):
         with open(self.test_logfile, "w") as log_file:
-            process_pcap_file("pcap/flowTracking.pcap", log_file)
+            process_pcap_file("../pcap/flowTracking.pcap", log_file)
 
         self.assertGreater(len(flows), 0, "No flows were tracked.")
 
@@ -118,10 +125,10 @@ class TestIntrusionDetection(unittest.TestCase):
                 self.assertGreaterEqual(flow_info["end_time"], flow_info["start_time"])
 
     def test_dns_query_with_encoding_issue(self):
-        self.process_pcap_and_check_log("pcap/dns_encoding.pcap", "Detected DNS Query")
+        self.process_pcap_and_check_log("../pcap/dns_encoding.pcap", "Detected DNS Query")
 
     def test_malformed_pcap_file(self):
-        self.process_pcap_and_check_log("pcap/malformed.pcap", "Packet dropped")
+        self.process_pcap_and_check_log("../pcap/malformed.pcap", "Packet dropped")
 
     def tearDown(self):
         flush_logs(self.test_logfile)
