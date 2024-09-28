@@ -1,0 +1,24 @@
+# Use a lightweight base image
+FROM debian:bullseye-slim
+
+# Install tcpreplay and necessary utilities
+RUN apt-get update && \
+    apt-get install -y tcpreplay && \
+    apt-get clean
+
+# Set the working directory inside the container
+WORKDIR /app
+
+# Copy PCAP files from the host to the container
+# You can mount a folder to dynamically update these files
+COPY pcap/ /app/pcap/
+
+# Copy the replay script that will handle replaying the PCAP files
+COPY replay_pcap.sh /app/replay_pcap.sh
+
+# Make sure the script is executable
+RUN chmod +x /app/replay_pcap.sh
+
+# Use host networking to send packets on the host's interfaces
+# Use the replay script to automatically replay PCAP files when the container starts
+CMD ["/app/replay_pcap.sh"]

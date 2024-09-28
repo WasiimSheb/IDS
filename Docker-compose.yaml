@@ -5,8 +5,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.ids
-    stdin_open: true # Keep stdin open to allow interaction
-    tty: true        # Allocate a pseudo-TTY
+    stdin_open: true
+    tty: true
+    network_mode: "host"  # Use the host network
     volumes:
       - shared-db:/app/db
 
@@ -19,6 +20,16 @@ services:
     volumes:
       - shared-db:/app/db
     command: python3 appy.py
+
+  traffic-simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile.tcpreplay
+    depends_on:
+      - ids-system
+    network_mode: "host"  # Use the host network
+    volumes:
+      - shared-db:/app/db
 
 volumes:
   shared-db:

@@ -5,7 +5,11 @@ import queue
 import time
 import sqlite3
 
-BASE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'app/db/')
+from shared import DIR
+
+
+
+BASE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), DIR)
 DB_PATH = os.path.join(BASE_DIR, 'traffic.db')   
 
 # Global log queue for thread-safe logging

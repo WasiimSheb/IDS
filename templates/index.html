@@ -24,6 +24,11 @@
             color: #333;
         }
 
+        body.dark-mode {
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+
         .container-fluid {
             margin-top: 30px;
         }
@@ -34,6 +39,10 @@
             color: #003366;
             margin-bottom: 20px;
             text-align: center;
+        }
+
+        body.dark-mode h1 {
+            color: #90caf9;
         }
 
         .stat-box {
@@ -53,10 +62,20 @@
             margin: 10px;
         }
 
+        body.dark-mode .stat-card {
+            background-color: #1f1f1f;
+            color: #e0e0e0;
+            box-shadow: 0 2px 12px rgba(255, 255, 255, 0.1);
+        }
+
         .stat-card h3 {
             font-size: 26px;
             margin-bottom: 10px;
             color: #003366;
+        }
+
+        body.dark-mode .stat-card h3 {
+            color: #90caf9;
         }
 
         .stat-card p {
@@ -64,9 +83,17 @@
             color: #555;
         }
 
+        body.dark-mode .stat-card p {
+            color: #bbb;
+        }
+
         .detected-threats h3 {
             color: #e63946;
             font-weight: 600;
+        }
+
+        body.dark-mode .detected-threats h3 {
+            color: #f28b82;
         }
 
         .chart-container {
@@ -81,6 +108,11 @@
             background-color: #ffffff;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
             margin-bottom: 20px;
+        }
+
+        body.dark-mode .card {
+            background-color: #1f1f1f;
+            color: #e0e0e0;
         }
 
         .data-row {
@@ -113,14 +145,39 @@
             border-radius: 5px;
         }
 
+        body.dark-mode th {
+            background-color: #3949ab;
+            color: #e0e0e0;
+            /* Ensure header text is readable */
+        }
+
         td {
             background-color: #fff;
             color: #555;
             border-bottom: 1px solid #f1f1f1;
         }
 
+        body.dark-mode td {
+            background-color: #2c2c2c;
+            color: #e0e0e0;
+            /* Ensure table data text is readable */
+            border-bottom: 1px solid #333;
+        }
+
+        /* Explicitly setting the text color for the table body */
+        body.dark-mode tbody td {
+            color: #e0e0e0 !important;
+            /* Force text color in dark mode */
+        }
+
         tbody tr:hover {
             background-color: #f0f4ff;
+        }
+
+        body.dark-mode tbody tr:hover {
+            background-color: #37474f;
+            color: #e0e0e0;
+            /* Ensure hover text remains readable */
         }
 
         .pagination-container {
@@ -138,6 +195,10 @@
             margin: 0 10px;
         }
 
+        body.dark-mode .pagination-container .btn {
+            background-color: #3949ab;
+        }
+
         .pagination-container .btn:hover {
             background-color: #0055aa;
         }
@@ -153,16 +214,33 @@
             font-weight: 500;
         }
 
+        body.dark-mode .flow-stats {
+            background-color: #ffeb3b;
+            color: #000;
+        }
+
         @media (max-width: 768px) {
             .data-row {
                 flex-direction: column;
             }
         }
+
+        /* Dark Mode Toggle Button */
+        #dark-mode-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
     </style>
+
 </head>
 
 <body>
     <div class="container-fluid">
+        <!-- Dark Mode Toggle Button -->
+        <button id="dark-mode-toggle" class="btn btn-light">Dark Mode</button>
+
         <!-- Title -->
         <h1>Intrusion Detection System Dashboard</h1>
 
@@ -281,12 +359,10 @@
                         '</tr>';
                     trafficDataTable.append(row);
 
-                    // Add timestamp as a label in ISO format
-                    labels.push(new Date(item.time * 1000).toISOString());  // Corrected timestamp format
+                    labels.push(new Date(item.time * 1000).toISOString());
                     dataPoints.push(parseInt(item.raw_data));
                 });
 
-                // Update the chart
                 trafficChart.data.labels = labels;
                 trafficChart.data.datasets[0].data = dataPoints;
                 trafficChart.update();
@@ -333,9 +409,9 @@
                         type: 'time',
                         time: {
                             unit: 'minute',
-                            tooltipFormat: 'MMM dd, yyyy, h:mm:ss a',  // Corrected tooltip format
+                            tooltipFormat: 'MMM dd, yyyy, h:mm:ss a',
                             displayFormats: {
-                                second: 'h:mm:ss a',  // X-axis tick format
+                                second: 'h:mm:ss a',
                                 minute: 'h:mm a'
                             }
                         },
@@ -371,14 +447,12 @@
             });
         }
 
-        // Initial Load
         var currentPage = 1;
         updateTrafficData(currentPage);
         updateAttackData(currentPage);
         updateDashboardStats();
         updateFlowData();
 
-        // Pagination controls
         $('#prev-page').on('click', function () {
             if (currentPage > 1) {
                 currentPage--;
@@ -393,13 +467,22 @@
             updateAttackData(currentPage);
         });
 
-        // Periodic refresh of stats and traffic data
         setInterval(function () {
             updateDashboardStats();
             updateTrafficData(currentPage);
             updateAttackData(currentPage);
             updateFlowData();
         }, 10000);
+
+        // Dark Mode Toggle Functionality
+        $('#dark-mode-toggle').on('click', function () {
+            $('body').toggleClass('dark-mode');
+            if ($('body').hasClass('dark-mode')) {
+                $('#dark-mode-toggle').text('Light Mode').removeClass('btn-light').addClass('btn-dark');
+            } else {
+                $('#dark-mode-toggle').text('Dark Mode').removeClass('btn-dark').addClass('btn-light');
+            }
+        });
     </script>
 </body>
 

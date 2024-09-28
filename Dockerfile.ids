@@ -8,16 +8,15 @@ RUN apt-get update && \
 # Set the working directory
 WORKDIR /app
 
+# Install Python dependencies
+RUN pip install scapy chardet
+
 # Copy your source code and pcap files into the container
-COPY src/ /app/
+COPY src/ /app/src/
 COPY pcap/ /app/pcap/
-COPY logs/ /app/logs/
 
-# Copy the startup script
-COPY start_services.sh /app/
+# Clear the database when the container starts
+RUN rm -f /app/db/traffic.db && mkdir -p /app/db && chmod -R 777 /app/db
 
-# Make the startup script executable
-RUN chmod +x /app/start_services.sh && mkdir -p /app/db && chmod -R 777 /app/db
-
-# Set the default command to run an interactive shell or idle state
-CMD ["/bin/sh"]
+# Start the IDS
+CMD ["python3", "/app/src/IDS.py"]

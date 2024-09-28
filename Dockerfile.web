@@ -8,9 +8,13 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && mkdir -p /app/db && chmod -R 777 /app/db
 
-# Copy the appy.py file from the root directory and the templates folder
+# Copy the app and templates
 COPY appy.py /app/appy.py
 COPY templates/ /app/templates/
+COPY src/ /app/src/  
+
+# Add src to PYTHONPATH
+ENV PYTHONPATH "${PYTHONPATH}:/app"
 
 # Expose the port Flask is using
 EXPOSE 5000
