@@ -390,45 +390,56 @@
         }
 
         var ctx = document.getElementById('trafficChart').getContext('2d');
-        var trafficChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Bytes Transferred',
-                    backgroundColor: 'rgba(0, 123, 255, 0.2)',
-                    borderColor: 'rgba(0, 123, 255, 1)',
-                    fill: false,
-                    data: []
-                }]
-            },
-            options: {
-                maintainAspectRatio: false,
-                scales: {
-                    x: {
-                        type: 'time',
-                        time: {
-                            unit: 'minute',
-                            tooltipFormat: 'MMM dd, yyyy, h:mm:ss a',
-                            displayFormats: {
-                                second: 'h:mm:ss a',
-                                minute: 'h:mm a'
-                            }
-                        },
-                        title: {
-                            display: true,
-                            text: 'Time'
+    var trafficChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],  // These will be your timestamps (e.g., ISO strings)
+            datasets: [{
+                label: 'Bytes Transferred',
+                backgroundColor: 'rgba(0, 123, 255, 0.2)',
+                borderColor: 'rgba(0, 123, 255, 1)',
+                fill: false,
+                data: [],  // Your data points (Bytes transferred)
+                tension: 0.4  // Smoother line curve
+            }]
+        },
+        options: {
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'time',  // Time scale on the X-axis
+                    time: {
+                        unit: 'minute',  // You can change this based on your data (e.g., 'hour', 'second')
+                        tooltipFormat: 'MMM dd, yyyy, h:mm:ss a',  // Formatting for tooltips
+                        displayFormats: {
+                            minute: 'h:mm a',  // Display format for X-axis labels
+                            second: 'h:mm:ss a'
                         }
                     },
-                    y: {
-                        title: {
-                            display: true,
-                            text: 'Bytes Transferred'
+                    title: {
+                        display: true,
+                        text: 'Time'
+                    }
+                },
+                y: {
+                    beginAtZero: true,  // Start the Y-axis at zero
+                    title: {
+                        display: true,
+                        text: 'Bytes Transferred'
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.parsed.y + ' Bytes';  // Tooltip format for Y-values
                         }
                     }
                 }
             }
-        });
+        }
+    });
 
         function updateDashboardStats() {
             $.getJSON('/stats', function (data) {

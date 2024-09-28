@@ -11,8 +11,9 @@ for pcap_file in $PCAP_DIR/*.pcap; do
   tcpreplay --intf1=eth0 $pcap_file
   
   # Optional: add a sleep interval between replays
-  sleep 8
+  sleep 10
 done
+echo "Replay complete"
 
 # Keep the container running after replay
 exec "$@"

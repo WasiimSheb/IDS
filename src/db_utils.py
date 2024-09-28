@@ -1,3 +1,5 @@
+import os
+import sqlite3
 import sqlite3
 import time
 from scapy.all import IP, TCP, UDP, raw
@@ -18,11 +20,6 @@ packet_commit_count = 0
 
 # Attack logging queue for async processing
 log_queue = queue.Queue()
-
-import os
-import sqlite3
-
-
 
 # Set the absolute path to the shared database location
 DB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), DIR)

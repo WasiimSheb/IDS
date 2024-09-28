@@ -19,4 +19,4 @@ COPY pcap/ /app/pcap/
 RUN rm -f /app/db/traffic.db && mkdir -p /app/db && chmod -R 777 /app/db
 
 # Start the IDS
-CMD ["python3", "/app/src/IDS.py"]
+CMD ["sh", "-c", "rm -f /app/db/traffic.db && python3 src/IDS.py --interface eth0"]
