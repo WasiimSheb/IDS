@@ -22,8 +22,7 @@ small_packet_tracker = defaultdict(list)  # Track small packets per flow
 traffic_data = []  # Placeholder to track traffic for visualization
 log_queue = queue.Queue()  # Queue for asynchronous logging
 
-# Helper Functions
-def process_packet(packet, log_file):
+def process_packet(packet, log_file, simulated_time):
     """
     Process an individual packet for analysis, including flow tracking, detection mechanisms, and flow expiration.
     """
@@ -59,29 +58,29 @@ def process_packet(packet, log_file):
 
         # Track small packets
         if len(packet) < small_packet_threshold:
-            small_packet_tracker[flow_key].append(time.time())
+            small_packet_tracker[flow_key].append(simulated_time)  # Use simulated time
 
         # Initialize the flow in flows if not present
         if flow_key not in flows:
             flows[flow_key] = {
                 "bytes": 0,
                 "packets": 0,
-                "start_time": time.time(),
-                "end_time": None
+                "start_time": simulated_time,  # Use simulated time
+                "end_time": simulated_time  # Initialize end_time
             }
 
         # Update flow information
         flows[flow_key]["bytes"] += len(packet)
         flows[flow_key]["packets"] += 1
-        flows[flow_key]["end_time"] = time.time()
+        flows[flow_key]["end_time"] = simulated_time  # Update end_time with simulated time
 
         # Log the flow data
-        log_to_txt_file(log_file, f"Flow: {flow_key}, Data Transferred: {flows[flow_key]['bytes']} bytes")
+        log_to_txt_file(log_file, f"Flow: {flow_key}, Data Transferred: {flows[flow_key]['bytes']} bytes at {simulated_time}")
 
         # Detection calls for intrusion detection mechanisms
         detect_file_transfer_protocols(flow_key, log_file)
         process_dns_query(packet, log_file)
-        detect_port_scan(src_ip, dst_port, time.time(), log_file)
+        detect_port_scan(src_ip, dst_port, simulated_time, log_file)  # Use simulated time here
         detect_syn_flood(packet, log_file)
         detect_http_covert_channel(packet, log_file)
         detect_icmp_data_exfiltration(packet, log_file)
@@ -90,18 +89,19 @@ def process_packet(packet, log_file):
 
         # Check for large outbound data transfer (possible data exfiltration)
         if flows[flow_key]["bytes"] > data_exfiltration_threshold:
-            log_to_txt_file(log_file, f"Potential Data Exfiltration Detected: Flow {flow_key}, Bytes transferred: {flows[flow_key]['bytes']}")
+            log_to_txt_file(log_file, f"Potential Data Exfiltration Detected: Flow {flow_key}, Bytes transferred: {flows[flow_key]['bytes']} at {simulated_time}")
             log_attack("Data Exfiltration", f"Flow {flow_key} transferred {flows[flow_key]['bytes']} bytes")
 
         # Detect traffic anomalies based on historical averages
         detect_traffic_anomalies(flow_key, log_file)
 
-        # Store packet data in the database
-        store_packet_data(packet)
+        # Store packet data in the database, passing simulated time
+        store_packet_data(packet, simulated_time)
 
     except Exception as e:
         # Log any errors that occur during packet processing
         log_to_txt_file(log_file, f"Error processing packet: {str(e)}")
+
 
 
 def process_dns_query(packet, log_file):
@@ -117,6 +117,7 @@ def process_dns_query(packet, log_file):
                     question = dns_layer.qd[i]
                     try:
                         query_name = question.qname.decode('utf-8')
+                        log_to_txt_file(log_file, f"DNS Query: {query_name}")
                     except UnicodeDecodeError:
                         log_to_txt_file(log_file, "Decoding issue: Non-ASCII character found in DNS query name.", level="WARNING")
                         decoding_issue = True

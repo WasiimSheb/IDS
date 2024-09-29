@@ -16,7 +16,7 @@ services:
       context: .
       dockerfile: Dockerfile.web
     ports:
-      - "5001:5000"
+      - "5000:5000"
     volumes:
       - shared-db:/app/db
     command: python3 appy.py

@@ -3,6 +3,8 @@
 PCAP_DIR="/app/pcap"
 
 # Loop through all PCAP files in the directory
+sleep 10
+
 for pcap_file in $PCAP_DIR/*.pcap; do
   echo "Replaying $pcap_file"
   

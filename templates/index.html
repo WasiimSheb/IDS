@@ -343,13 +343,28 @@
             $.getJSON('/data', { page: page, page_size: 50 }, function (response) {
                 var trafficDataTable = $('#traffic_data');
                 trafficDataTable.empty();
-
+    
+                console.log('Received Traffic Data:', response.data);
+    
+                if (response.data.length === 0) {
+                    console.log('No traffic data found.');
+                    return;
+                }
+    
                 var labels = [];
                 var dataPoints = [];
-
+    
                 response.data.forEach(function (item) {
+                    var formattedTime = new Date(item.time * 1000).toLocaleString(undefined, {
+                        hour12: true,
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        fractionalSecondDigits: 3  // Use 3 digits for milliseconds
+                    });
+    
                     var row = '<tr>' +
-                        '<td>' + new Date(item.time * 1000).toLocaleString() + '</td>' +
+                        '<td>' + formattedTime + '</td>' +
                         '<td>' + item.src_ip + '</td>' +
                         '<td>' + item.src_port + '</td>' +
                         '<td>' + item.dst_ip + '</td>' +
@@ -358,112 +373,139 @@
                         '<td>' + item.raw_data + ' Bytes</td>' +
                         '</tr>';
                     trafficDataTable.append(row);
-
+    
                     labels.push(new Date(item.time * 1000).toISOString());
                     dataPoints.push(parseInt(item.raw_data));
                 });
-
+    
                 trafficChart.data.labels = labels;
                 trafficChart.data.datasets[0].data = dataPoints;
                 trafficChart.update();
-
+    
                 $('#currentPage').text(page);
+            }).fail(function () {
+                console.error('Error fetching traffic data.');
             });
         }
-
+    
         function updateAttackData(page) {
             $.getJSON('/attacks', { page: page, page_size: 32 }, function (response) {
                 var attackDataTable = $('#attack_data');
                 attackDataTable.empty();
-
+    
+                console.log('Received Attack Data:', response.attacks);
+    
+                if (response.attacks.length === 0) {
+                    console.log('No attack data found.');
+                    return;
+                }
+    
                 response.attacks.forEach(function (attack) {
                     var row = '<tr>' +
                         '<td>' + attack.type + '</td>' +
                         '<td>' + attack.description + '</td>' +
-                        '<td>' + new Date(attack.timestamp * 1000).toLocaleString() + '</td>' +
+                        '<td>' + new Date(attack.timestamp * 1000).toLocaleString(undefined, {
+                            hour12: true,
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            fractionalSecondDigits: 3
+                        }) + '</td>' +
                         '</tr>';
                     attackDataTable.append(row);
                 });
-
+    
                 $('#currentPage').text(page);
+            }).fail(function () {
+                console.error('Error fetching attack data.');
             });
         }
-
+    
+        // Define the traffic chart with updated design
         var ctx = document.getElementById('trafficChart').getContext('2d');
-    var trafficChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: [],  // These will be your timestamps (e.g., ISO strings)
-            datasets: [{
-                label: 'Bytes Transferred',
-                backgroundColor: 'rgba(0, 123, 255, 0.2)',
-                borderColor: 'rgba(0, 123, 255, 1)',
-                fill: false,
-                data: [],  // Your data points (Bytes transferred)
-                tension: 0.4  // Smoother line curve
-            }]
-        },
-        options: {
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    type: 'time',  // Time scale on the X-axis
-                    time: {
-                        unit: 'minute',  // You can change this based on your data (e.g., 'hour', 'second')
-                        tooltipFormat: 'MMM dd, yyyy, h:mm:ss a',  // Formatting for tooltips
-                        displayFormats: {
-                            minute: 'h:mm a',  // Display format for X-axis labels
-                            second: 'h:mm:ss a'
+        var trafficChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Bytes Transferred',
+                    backgroundColor: 'rgba(0, 123, 255, 0.2)',
+                    borderColor: 'rgba(0, 123, 255, 1)',
+                    fill: false,
+                    data: [],
+                    borderWidth: 3,  // Thicker line
+                    pointRadius: 5,  // Larger points
+                    pointHoverRadius: 7,  // Larger hover points
+                    pointBackgroundColor: 'rgba(0, 123, 255, 1)',  // Color for points
+                    pointBorderWidth: 1,  // Thin border for points
+                    shadowOffsetX: 2,  // Slight shadow for depth
+                    shadowOffsetY: 2,
+                    shadowBlur: 4,
+                    shadowColor: 'rgba(0, 0, 0, 0.3)'  // Shadow effect for line
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'millisecond',
+                            tooltipFormat: 'MMM dd, yyyy, h:mm:ss.SSS a',
+                            displayFormats: {
+                                millisecond: 'h:mm:ss.SSS a'
+                            }
+                        },
+                        ticks: {
+                            autoSkip: false,
+                            maxRotation: 45,
+                            minRotation: 45
+                        },
+                        title: {
+                            display: true,
+                            text: 'Time'
                         }
                     },
-                    title: {
-                        display: true,
-                        text: 'Time'
-                    }
-                },
-                y: {
-                    beginAtZero: true,  // Start the Y-axis at zero
-                    title: {
-                        display: true,
-                        text: 'Bytes Transferred'
-                    }
-                }
-            },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.parsed.y + ' Bytes';  // Tooltip format for Y-values
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Bytes Transferred'
                         }
                     }
                 }
             }
-        }
-    });
-
+        });
+    
         function updateDashboardStats() {
             $.getJSON('/stats', function (data) {
+                console.log('Received Stats:', data);
                 $('#total-packets').text(data.total_packets);
                 $('#total-data').text(`${data.total_data_transferred} Bytes`);
                 $('#num-flows').text(data.num_flows);
-
+    
                 let attackText = data.detected_attacks ? data.detected_attacks : 'None';
                 $('#detected-threats').text(attackText);
+            }).fail(function () {
+                console.error('Error fetching dashboard stats.');
             });
         }
-
+    
         function updateFlowData() {
             $.getJSON('/flows', function (data) {
+                console.log('Received Flow Data:', data);
                 $('#flowData').text(`Total Flows: ${data.total_flows}, Total Bytes Transferred: ${data.total_bytes} Bytes`);
+            }).fail(function () {
+                console.error('Error fetching flow data.');
             });
         }
-
+    
         var currentPage = 1;
         updateTrafficData(currentPage);
         updateAttackData(currentPage);
         updateDashboardStats();
         updateFlowData();
-
+    
         $('#prev-page').on('click', function () {
             if (currentPage > 1) {
                 currentPage--;
@@ -471,20 +513,20 @@
                 updateAttackData(currentPage);
             }
         });
-
+    
         $('#next-page').on('click', function () {
             currentPage++;
             updateTrafficData(currentPage);
             updateAttackData(currentPage);
         });
-
+    
         setInterval(function () {
             updateDashboardStats();
             updateTrafficData(currentPage);
             updateAttackData(currentPage);
             updateFlowData();
         }, 10000);
-
+    
         // Dark Mode Toggle Functionality
         $('#dark-mode-toggle').on('click', function () {
             $('body').toggleClass('dark-mode');

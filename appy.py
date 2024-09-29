@@ -78,20 +78,20 @@ def get_data():
 
     conn = get_db_connection()
     c = conn.cursor()
-    
+
     c.execute("""
         SELECT time, src_ip, src_port, dst_ip, dst_port, protocol, raw_data
         FROM traffic_data
         LIMIT ?, ?
     """, (start, page_size))
     data = c.fetchall()
-    
+
     conn.close()
 
     return jsonify({
         'data': [
             {
-                'time': row[0],
+                'time': f'{row[0]:.6f}',  # Use six decimal places for microsecond precision
                 'src_ip': row[1],
                 'src_port': row[2],
                 'dst_ip': row[3],
@@ -134,6 +134,7 @@ def get_stats():
 
     # Get detected attacks from detected_attacks table
     c.execute("SELECT COUNT(*) FROM detected_attacks")
+
     detected_attacks = c.fetchone()[0]
 
     # Get the number of flows from flow_data

@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import traceback
 import argparse
 from scapy.all import sniff, rdpcap  # Import sniff and rdpcap from scapy
@@ -9,13 +10,44 @@ from db_utils import init_db  # Import the database initialization function
 
 def process_pcap_file(pcap_file, log_file):
     """
-    Read packets from a PCAP file and process each one.
+    Read packets from a PCAP file and process each one, simulating real-time processing.
     """
     try:
-        packets = rdpcap(pcap_file)  # Read packets from PCAP file
+        packets = rdpcap(pcap_file)  # Read packets from the PCAP file
+        if not packets:
+            log_to_txt_file(log_file, "No packets to process.")
+            return
+
+        time.time()  # Get the current real time when we start processing
+        first_packet_time = packets[0].time  # Timestamp of the first packet in the pcap
+        previous_packet_time = first_packet_time  # Track the time of the previous packet for calculating the delay
+
         for packet in packets:
-            process_packet(packet, log_file)  # Pass the packet to process_packet
+            # Get the timestamp from the packet
+            packet_time = packet.time
+
+            # Calculate the time difference between consecutive packets in the pcap file
+            time_diff = float(packet_time - previous_packet_time) # This is the time delay in the pcap file
+            previous_packet_time = packet_time
+            if time_diff < 0:
+                time_diff = 0
+
+                time.sleep(time_diff)  # Sleep for the time difference between consecutive packets
+
+            # Adjust the current real-time to simulate when the packet was processed
+            simulated_time = time.time()
+
+            # Process the packet and store it with the adjusted timestamp
+            process_packet(packet, log_file, simulated_time)  # Pass the packet along with the simulated time
+
         log_to_txt_file(log_file, f"Finished processing PCAP file: {pcap_file}", level="INFO")
+
+    except FileNotFoundError:
+        log_to_txt_file(log_file, f"Error: PCAP file '{pcap_file}' not found.", level="ERROR")
+    except Exception as e:
+        log_to_txt_file(log_file, f"Error reading PCAP file '{pcap_file}': {e}", level="ERROR")
+        traceback.print_exc()
+
     except FileNotFoundError:
         log_to_txt_file(log_file, f"Error: PCAP file '{pcap_file}' not found.", level="ERROR")
     except Exception as e:
@@ -47,7 +79,7 @@ def main():
             elif args.interface:
                 print(f"Sniffing on interface: {args.interface}")
                 log_to_txt_file(log_file, f"Sniffing on interface: {args.interface}", level="INFO")
-                sniff(iface=args.interface, prn=lambda pkt: process_packet(pkt, log_file))
+                sniff(iface=args.interface, prn=lambda pkt: process_packet(pkt, log_file , time.time()))
             else:
                 print("You must specify either --pcapfile or --interface.")
                 sys.exit(1)

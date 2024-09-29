@@ -1,7 +1,7 @@
 import unittest
 import os
 from scapy.all import IP, TCP, raw
-from IDS import process_pcap_file  # Import high-level functions from IDS.py
+from IDS import process_pcap_file
 from packet_validation import validate_ip_packet, validate_tcp_packet  # Import from packet_validation
 from shared import flows
 from db_utils import get_db_connection, init_db

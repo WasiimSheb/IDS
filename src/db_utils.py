@@ -85,7 +85,7 @@ def init_db():
     finally:
         conn.close()  # Ensure that the connection is always closed
 
-def store_packet_data(packet):
+def store_packet_data(packet, simulated_time):
     """
     Store packet information in a batch and update flow information.
     """
@@ -101,12 +101,12 @@ def store_packet_data(packet):
     raw_data = raw(packet).hex()  # Store raw packet data in hex format
     packet_size = len(raw(packet))  # Correctly capture packet size
 
-    # Get the current time and add a small offset to ensure no duplicate timestamps
-    current_time = time.time() + time_offset
-    time_offset += 0.001  # Increment by a small value (1 ms) for each packet
+    # Ensure simulated_time is converted to float
+    simulated_time = float(simulated_time)
 
+   
     # Append the packet details to the batch
-    packet_batch.append((current_time, src_ip, dst_ip, protocol, src_port, dst_port, raw_data))
+    packet_batch.append((simulated_time, src_ip, dst_ip, protocol, src_port, dst_port, raw_data))
 
     # Define the flow identifier (5-tuple: src_ip, dst_ip, src_port, dst_port, protocol)
     flow_id = (src_ip, dst_ip, src_port, dst_port, protocol)
@@ -116,13 +116,13 @@ def store_packet_data(packet):
         flow_table[flow_id] = {
             'packet_count': 1,
             'total_bytes': packet_size,
-            'start_time': current_time,
-            'end_time': current_time
+            'start_time': simulated_time,
+            'end_time': simulated_time
         }
     else:
         flow_table[flow_id]['packet_count'] += 1
         flow_table[flow_id]['total_bytes'] += packet_size
-        flow_table[flow_id]['end_time'] = current_time
+        flow_table[flow_id]['end_time'] = simulated_time
 
     # Commit the data after every batch size
     if len(packet_batch) >= BATCH_SIZE:
@@ -131,6 +131,7 @@ def store_packet_data(packet):
             _commit_packet_batch_async()
         else:
             _commit_packet_batch()
+
 
 def _commit_packet_batch():
     """
